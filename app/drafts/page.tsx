@@ -116,7 +116,7 @@ function DraftsPage() {
         </button>
         <h1 className="text-xl font-bold">fomo</h1>
         <div className="flex items-center gap-2">
-          <NotificationIcon unreadCount={3} />
+                      <NotificationIcon unreadCount={0} />
           <HamburgerMenu />
         </div>
       </header>

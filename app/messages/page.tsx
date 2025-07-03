@@ -49,7 +49,7 @@ function MessagesPage() {
         timestamp: new Date("2024-01-15T22:35:00"),
         isFromCurrentUser: false,
       },
-      unreadCount: 2,
+      unreadCount: 0,
       partyName: "Sarah's Birthday Bash",
     },
     {
@@ -83,7 +83,7 @@ function MessagesPage() {
         timestamp: new Date("2024-01-15T20:15:00"),
         isFromCurrentUser: false,
       },
-      unreadCount: 1,
+      unreadCount: 0,
       partyName: "Game Night",
     },
     {
@@ -160,7 +160,7 @@ function MessagesPage() {
           </Button>
           <h1 className="text-lg font-semibold text-foreground">All Messages</h1>
           <div className="flex items-center gap-2">
-            <NotificationIcon unreadCount={3} />
+            <NotificationIcon unreadCount={0} />
             <HamburgerMenu />
           </div>
         </div>

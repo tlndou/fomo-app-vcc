@@ -32,7 +32,9 @@ import type { User } from "@/types/feed"
 import { NotificationIcon } from "@/components/notification-icon"
 import { HamburgerMenu } from "@/components/hamburger-menu"
 import { ProtectedRoute } from "@/components/protected-route"
-import { useAuth } from "@/context/supabase-auth-context"
+import { useAuth } from "@/context/auth-context"
+import { useParties } from "@/context/party-context"
+import { useUserStats } from "@/hooks/use-user-stats"
 
 // Extended user type for profile
 interface ProfileUser extends User {
@@ -42,9 +44,8 @@ interface ProfileUser extends User {
   hostedParties?: number
   attendedParties?: number
   friendCount?: number
+  age?: number
 }
-
-const mockUsers: ProfileUser[] = []
 
 export default function ProtectedProfilePage() {
   return (
@@ -59,6 +60,8 @@ function ProfilePage() {
   const params = useParams()
   const userId = params.userId as string
   const { user: authUser } = useAuth()
+  const { parties } = useParties()
+  const { stats, incrementFriendCount, decrementFriendCount } = useUserStats(userId)
 
   const [user, setUser] = useState<ProfileUser | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -80,26 +83,64 @@ function ProfilePage() {
         username: authUser.username,
         avatar: authUser.avatar || "/placeholder.svg?height=120&width=120",
         friendStatus: "self",
-        bio: authUser.bio || "Living my best life! 🎉",
-        joinDate: "January 10, 2023",
-        starSign: authUser.starSign || "Aquarius",
-        hostedParties: 8,
-        attendedParties: 23,
-        friendCount: 89,
+        bio: authUser.bio || "",
+        joinDate: authUser.joinDate || new Date().toLocaleDateString(),
+        starSign: authUser.starSign || "",
+        hostedParties: stats.hostedParties,
+        attendedParties: stats.attendedParties,
+        friendCount: stats.friendCount,
+        age: authUser.age,
       }
       setUser(currentUserProfile)
       setEditName(currentUserProfile.name)
       setEditBio(currentUserProfile.bio || "")
     } else {
-      // Look for other users in mock data
-      const foundUser = mockUsers.find((u) => u.id === userId)
-      if (foundUser) {
-        setUser(foundUser)
-        setEditName(foundUser.name)
-        setEditBio(foundUser.bio || "")
+      // For other users, try to get their data from localStorage or create a placeholder
+      // In a real app, this would fetch from an API
+      const storedUsers = localStorage.getItem('fomo-users')
+      const users = storedUsers ? JSON.parse(storedUsers) : {}
+      const otherUserData = users[userId]
+      
+      if (otherUserData) {
+        const otherUserProfile: ProfileUser = {
+          id: userId,
+          name: otherUserData.name || "Unknown User",
+          username: otherUserData.username || "unknown",
+          avatar: otherUserData.avatar || "/placeholder-user.jpg",
+          friendStatus: "none",
+          bio: otherUserData.bio || "",
+          joinDate: otherUserData.joinDate || "",
+          starSign: otherUserData.starSign || "",
+          hostedParties: 0,
+          attendedParties: 0,
+          friendCount: 0,
+          age: otherUserData.age,
+        }
+        setUser(otherUserProfile)
+        setEditName(otherUserProfile.name)
+        setEditBio(otherUserProfile.bio || "")
+      } else {
+        // Fallback for unknown users
+        const fallbackProfile: ProfileUser = {
+          id: userId,
+          name: "Unknown User",
+          username: "unknown",
+          avatar: "/placeholder-user.jpg",
+          friendStatus: "none",
+          bio: "",
+          joinDate: "",
+          starSign: "",
+          hostedParties: 0,
+          attendedParties: 0,
+          friendCount: 0,
+          age: undefined,
+        }
+        setUser(fallbackProfile)
+        setEditName(fallbackProfile.name)
+        setEditBio(fallbackProfile.bio || "")
       }
     }
-  }, [userId, authUser])
+  }, [userId, authUser, stats])
 
   if (!user) {
     return <div>User not found</div>
@@ -110,8 +151,10 @@ function ProfilePage() {
   const handleFriendAction = () => {
     if (user.friendStatus === "none") {
       setUser((prev) => (prev ? { ...prev, friendStatus: "pending" } : null))
+      // In a real app, this would send a friend request to the server
     } else if (user.friendStatus === "pending") {
       setUser((prev) => (prev ? { ...prev, friendStatus: "none" } : null))
+      // In a real app, this would cancel the friend request
     } else if (user.friendStatus === "friends") {
       setUser((prev) =>
         prev
@@ -122,18 +165,20 @@ function ProfilePage() {
             }
           : null,
       )
+      decrementFriendCount()
     }
   }
 
   const handleShare = async () => {
-    const url = window.location.href
+    // Create unique profile URL
+    const profileUrl = `${window.location.origin}/profile/${user.id}`
 
     if (navigator.share) {
       try {
         await navigator.share({
           title: `${user.name}'s Profile`,
           text: `Check out ${user.name}'s profile on FOMO!`,
-          url: url,
+          url: profileUrl,
         })
       } catch (err) {
         console.log("Error sharing:", err)
@@ -141,7 +186,7 @@ function ProfilePage() {
     } else {
       // Fallback to clipboard
       try {
-        await navigator.clipboard.writeText(url)
+        await navigator.clipboard.writeText(profileUrl)
         alert("Profile link copied to clipboard!")
       } catch (err) {
         console.log("Error copying to clipboard:", err)
@@ -166,6 +211,22 @@ function ProfilePage() {
           }
         : null,
     )
+
+    // Update stored user data in localStorage
+    if (authUser) {
+      const storedUsers = localStorage.getItem('fomo-users')
+      const users = storedUsers ? JSON.parse(storedUsers) : {}
+      
+      if (users[authUser.id]) {
+        users[authUser.id] = {
+          ...users[authUser.id],
+          name: editName,
+          bio: editBio,
+          avatar: editAvatar || users[authUser.id].avatar,
+        }
+        localStorage.setItem('fomo-users', JSON.stringify(users))
+      }
+    }
 
     setIsSaving(false)
     setIsEditDialogOpen(false)
@@ -225,7 +286,7 @@ function ProfilePage() {
           </Button>
           <h1 className="text-lg font-semibold text-gray-900">Profile</h1>
           <div className="flex items-center gap-2">
-            <NotificationIcon unreadCount={3} />
+            <NotificationIcon unreadCount={0} />
             <HamburgerMenu />
           </div>
         </div>
@@ -308,24 +369,38 @@ function ProfilePage() {
             <h1 className="text-2xl font-bold mb-1">{user.name}</h1>
             <p className="text-gray-500 mb-4">@{user.username}</p>
 
+            {/* Age and Star Sign */}
+            {(user.age || user.starSign) && (
+              <div className="flex justify-center gap-4 text-sm text-gray-500 mb-4">
+                {user.age && (
+                  <span>{user.age} years old</span>
+                )}
+                {user.age && user.starSign && (
+                  <span>•</span>
+                )}
+                {user.starSign && (
+                  <span>{user.starSign}</span>
+                )}
+              </div>
+            )}
+
             {/* Bio */}
             {user.bio && <p className="text-gray-700 mb-6 max-w-md mx-auto">{user.bio}</p>}
 
-            {/* Join Date and Star Sign */}
-            <div className="flex justify-center gap-8 text-sm text-gray-500">
-              <div className="flex items-center gap-1">
-                <Calendar className="w-4 h-4" />
-                <span>Joined</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Sparkles className="w-4 h-4" />
-                <span>Star Sign</span>
-              </div>
-            </div>
-            <div className="flex justify-center gap-8 text-sm font-medium mt-1">
-              <span>{user.joinDate}</span>
-              <span>{user.starSign}</span>
-            </div>
+            {/* Join Date - only show if it has a value */}
+            {user.joinDate && (
+              <>
+                <div className="flex justify-center gap-8 text-sm text-gray-500">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    <span>Joined</span>
+                  </div>
+                </div>
+                <div className="flex justify-center gap-8 text-sm font-medium mt-1">
+                  <span>{user.joinDate}</span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 

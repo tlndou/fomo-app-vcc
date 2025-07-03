@@ -1,114 +1,187 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { createContext, useContext, useState, useEffect, ReactNode } from "react"
+import { supabase } from "@/lib/supabase"
 
 interface User {
   id: string
   name: string
   username: string
-  email: string
   avatar?: string
-  age: string
-  starSign: string
+  email?: string
+  bio?: string
+  joinDate?: string
+  starSign?: string
+  age?: number
 }
 
 interface AuthContextType {
   user: User | null
-  login: (email: string, password: string) => Promise<void>
-  signup: (
-    name: string,
-    username: string,
-    email: string,
-    password: string,
-    age: string,
-    starSign: string,
-  ) => Promise<void>
-  logout: () => void
-  isLoading: boolean
+  loading: boolean
+  signIn: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string, name: string, username: string, starSign?: string, age?: number) => Promise<void>
+  signOut: () => Promise<void>
+  updateProfile: (updates: Partial<User>) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
+  const [loading, setLoading] = useState(true)
 
-  // Check for existing session on mount
   useEffect(() => {
-    const savedUser = localStorage.getItem("fomo_user")
-    if (savedUser) {
-      setUser(JSON.parse(savedUser))
+    // Get initial session
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        const userData: User = {
+          id: session.user.id,
+          name: session.user.user_metadata?.name || "User",
+          username: session.user.user_metadata?.username || "user",
+          email: session.user.email,
+          avatar: session.user.user_metadata?.avatar_url,
+          bio: session.user.user_metadata?.bio,
+          joinDate: session.user.user_metadata?.joinDate,
+          starSign: session.user.user_metadata?.starSign,
+          age: session.user.user_metadata?.age,
+        }
+        setUser(userData)
+
+        // Store user data in localStorage for other users to access
+        const storedUsers = localStorage.getItem('fomo-users')
+        const users = storedUsers ? JSON.parse(storedUsers) : {}
+        
+        users[session.user.id] = {
+          id: session.user.id,
+          name: userData.name,
+          username: userData.username,
+          starSign: userData.starSign,
+          joinDate: userData.joinDate,
+          avatar: userData.avatar,
+          bio: userData.bio,
+          age: userData.age,
+        }
+        
+        localStorage.setItem('fomo-users', JSON.stringify(users))
+      }
+      setLoading(false)
     }
+
+    getSession()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          const userData: User = {
+            id: session.user.id,
+            name: session.user.user_metadata?.name || "User",
+            username: session.user.user_metadata?.username || "user",
+            email: session.user.email,
+            avatar: session.user.user_metadata?.avatar_url,
+            bio: session.user.user_metadata?.bio,
+            joinDate: session.user.user_metadata?.joinDate,
+            starSign: session.user.user_metadata?.starSign,
+            age: session.user.user_metadata?.age,
+          }
+          setUser(userData)
+
+          // Store user data in localStorage for other users to access
+          const storedUsers = localStorage.getItem('fomo-users')
+          const users = storedUsers ? JSON.parse(storedUsers) : {}
+          
+          users[session.user.id] = {
+            id: session.user.id,
+            name: userData.name,
+            username: userData.username,
+            starSign: userData.starSign,
+            joinDate: userData.joinDate,
+            avatar: userData.avatar,
+            bio: userData.bio,
+            age: userData.age,
+          }
+          
+          localStorage.setItem('fomo-users', JSON.stringify(users))
+        } else {
+          setUser(null)
+        }
+        setLoading(false)
+      }
+    )
+
+    return () => subscription.unsubscribe()
   }, [])
 
-  const login = async (email: string, password: string) => {
-    setIsLoading(true)
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // Mock authentication - in real app, validate with backend
-    if (email === "demo@fomo.app" && password === "Password1") {
-      const mockUser: User = {
-        id: "current-user",
-        name: "Demo User",
-        username: "demo_user",
-        email: email,
-        avatar: "/placeholder.svg?height=40&width=40",
-        age: "25",
-        starSign: "Aquarius",
-      }
-
-      setUser(mockUser)
-      localStorage.setItem("fomo_user", JSON.stringify(mockUser))
-      router.push("/")
-    } else {
-      throw new Error("Invalid credentials")
-    }
-
-    setIsLoading(false)
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw error
   }
 
-  const signup = async (
-    name: string,
-    username: string,
-    email: string,
-    password: string,
-    age: string,
-    starSign: string,
-  ) => {
-    setIsLoading(true)
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    const newUser: User = {
-      id: Date.now().toString(),
-      name,
-      username,
+  const signUp = async (email: string, password: string, name: string, username: string, starSign?: string, age?: number) => {
+    const { data, error } = await supabase.auth.signUp({
       email,
-      age,
-      starSign,
-      avatar: "/placeholder.svg?height=40&width=40",
+      password,
+      options: {
+        data: {
+          name,
+          username,
+          starSign,
+          joinDate: new Date().toLocaleDateString(),
+          age,
+        }
+      }
+    })
+    if (error) throw error
+
+    // Store user data in localStorage for other users to access
+    if (data.user) {
+      const storedUsers = localStorage.getItem('fomo-users')
+      const users = storedUsers ? JSON.parse(storedUsers) : {}
+      
+      users[data.user.id] = {
+        id: data.user.id,
+        name,
+        username,
+        starSign,
+        joinDate: new Date().toLocaleDateString(),
+        avatar: data.user.user_metadata?.avatar_url,
+        bio: "",
+        age,
+      }
+      
+      localStorage.setItem('fomo-users', JSON.stringify(users))
     }
-
-    setUser(newUser)
-    localStorage.setItem("fomo_user", JSON.stringify(newUser))
-    router.push("/")
-
-    setIsLoading(false)
   }
 
-  const logout = () => {
-    setUser(null)
-    localStorage.removeItem("fomo_user")
-    router.push("/login")
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
   }
 
-  return <AuthContext.Provider value={{ user, login, signup, logout, isLoading }}>{children}</AuthContext.Provider>
+  const updateProfile = async (updates: Partial<User>) => {
+    if (!user) return
+
+    const { error } = await supabase.auth.updateUser({
+      data: updates
+    })
+    if (error) throw error
+
+    setUser(prev => prev ? { ...prev, ...updates } : null)
+  }
+
+  return (
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      signIn,
+      signUp,
+      signOut,
+      updateProfile,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {

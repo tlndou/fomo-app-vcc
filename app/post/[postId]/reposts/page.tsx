@@ -226,7 +226,7 @@ function RepostsPage() {
           </Button>
           <h1 className="text-lg font-semibold text-foreground">Reposts</h1>
           <div className="flex items-center gap-2">
-            <NotificationIcon unreadCount={3} />
+            <NotificationIcon unreadCount={0} />
             <HamburgerMenu />
           </div>
         </div>

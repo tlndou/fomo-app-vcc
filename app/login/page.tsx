@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
-import { useAuth } from "@/context/supabase-auth-context"
+import { useAuth } from "@/context/auth-context"
 import { useRouter } from "next/navigation"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
-  const { login, isLoading } = useAuth()
+  const { signIn, loading } = useAuth()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,7 +25,8 @@ export default function LoginPage() {
     setError("")
 
     try {
-      await login(email, password)
+      await signIn(email, password)
+      router.push("/")
     } catch (err) {
       setError("Invalid email or password")
     }
@@ -93,8 +94,8 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
-            {isLoading ? "Signing in..." : "Sign in"}
+          <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={loading}>
+            {loading ? "Signing in..." : "Sign in"}
           </Button>
         </form>
 

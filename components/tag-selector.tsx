@@ -13,6 +13,7 @@ interface TagSelectorProps {
   onClose: () => void
   selectedTags: string[]
   onUpdateTags: (tags: string[]) => void
+  partyUserTags?: Array<{ id: string; name: string; color: string }>
 }
 
 const eventTags = [
@@ -45,12 +46,25 @@ const popularTags = [
   "Amazing",
 ]
 
-export function TagSelector({ isOpen, onClose, selectedTags, onUpdateTags }: TagSelectorProps) {
-  const [activeCategory, setActiveCategory] = useState<"event" | "popular">("event")
+export function TagSelector({ isOpen, onClose, selectedTags, onUpdateTags, partyUserTags = [] }: TagSelectorProps) {
+  const [activeCategory, setActiveCategory] = useState<"party" | "event" | "popular">("party")
   const [searchQuery, setSearchQuery] = useState("")
   const [customTag, setCustomTag] = useState("")
 
-  const currentTags = activeCategory === "event" ? eventTags : popularTags
+  const getCurrentTags = () => {
+    switch (activeCategory) {
+      case "party":
+        return partyUserTags.map(tag => tag.name)
+      case "event":
+        return eventTags
+      case "popular":
+        return popularTags
+      default:
+        return eventTags
+    }
+  }
+
+  const currentTags = getCurrentTags()
   const filteredTags = currentTags.filter((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
 
   const handleToggleTag = (tag: string) => {
@@ -105,6 +119,14 @@ export function TagSelector({ isOpen, onClose, selectedTags, onUpdateTags }: Tag
 
           {/* Category Tabs */}
           <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+            <Button
+              variant={activeCategory === "party" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setActiveCategory("party")}
+              className="flex-1"
+            >
+              Party Tags
+            </Button>
             <Button
               variant={activeCategory === "event" ? "default" : "ghost"}
               size="sm"

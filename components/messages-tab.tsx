@@ -53,24 +53,7 @@ export function MessagesTab({ currentUser, users, posts, partyName }: MessagesTa
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
 
   // Mock messages data - filtered for this party
-  const [messages] = useState<Message[]>([
-    {
-      id: "1",
-      from: users[0] || currentUser,
-      to: currentUser,
-      content: `Hey! Did you see what happened at ${partyName || "the party"}?`,
-      timestamp: new Date("2024-01-15T22:35:00"),
-      read: false,
-    },
-    {
-      id: "2",
-      from: currentUser,
-      to: users[1] || currentUser,
-      post: posts[0],
-      timestamp: new Date("2024-01-15T22:30:00"),
-      read: true,
-    },
-  ])
+  const [messages] = useState<Message[]>([])
 
   const filteredUsers = users.filter((user) => {
     if (activeMessageTab === "starred" && user.friendStatus !== "friends") return false

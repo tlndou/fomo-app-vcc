@@ -2,8 +2,11 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { AuthProvider } from "@/context/supabase-auth-context"
-import { ThemeProvider } from "@/context/theme-context"
+import { AuthProvider } from "@/context/auth-context"
+import { ThemeProvider } from "@/components/theme-provider"
+import { DraftProvider } from "@/context/draft-context"
+import { PartyProvider } from "@/context/party-context"
+import { FriendProvider } from "@/context/friend-context"
 import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -24,8 +27,14 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider>
           <AuthProvider>
-            {children}
-            <Toaster />
+            <PartyProvider>
+              <FriendProvider>
+                <DraftProvider>
+                  {children}
+                  <Toaster />
+                </DraftProvider>
+              </FriendProvider>
+            </PartyProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

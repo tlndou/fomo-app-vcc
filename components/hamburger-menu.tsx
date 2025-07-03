@@ -9,23 +9,34 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Menu, User, Settings, HelpCircle, LogOut } from "lucide-react"
+import { Menu, User, Settings, HelpCircle, LogOut, Clock } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/context/supabase-auth-context"
+import { useAuth } from "@/context/auth-context"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { useDrafts } from "@/context/draft-context"
 
 export function HamburgerMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const router = useRouter()
-  const { user, logout } = useAuth()
+  const { user, signOut } = useAuth()
+  const { drafts } = useDrafts()
+  
+  const pendingDrafts = drafts.filter(draft => 
+    draft.status === 'draft' || draft.status === 'failed'
+  )
 
   const handleNavigation = (path: string) => {
     router.push(path)
     setIsOpen(false)
   }
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    try {
+      await signOut()
+      router.push("/login")
+    } catch (error) {
+      console.error("Logout error:", error)
+    }
     setIsOpen(false)
   }
 
@@ -47,6 +58,15 @@ export function HamburgerMenu() {
             <DropdownMenuItem onClick={() => handleNavigation("/settings")}>
               <Settings className="mr-2 h-4 w-4" />
               <span>Settings</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleNavigation("/drafts")}>
+              <Clock className="mr-2 h-4 w-4" />
+              <span>Drafts</span>
+              {pendingDrafts.length > 0 && (
+                <span className="ml-auto bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {pendingDrafts.length}
+                </span>
+              )}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => handleNavigation("/help")}>
               <HelpCircle className="mr-2 h-4 w-4" />

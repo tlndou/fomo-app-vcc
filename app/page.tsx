@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Clock, MapPin, Users, User, Plus, FileText } from "lucide-react"
+import { Calendar, Clock, MapPin, Users, User, Plus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { Party } from "@/types/party"
 import { ProtectedRoute } from "@/components/protected-route"
@@ -12,26 +12,24 @@ import { HamburgerMenu } from "@/components/hamburger-menu"
 import { NotificationIcon } from "@/components/notification-icon"
 import { supabase } from '@/lib/supabase'
 import { useToast } from "@/hooks/use-toast"
-
-// Mock data
-const mockParties: Party[] = []
-
-// Mock drafts data
-const mockDrafts: Party[] = []
+import { useParties } from "@/context/party-context"
+import { BottomNavigation, type TabType } from "@/components/bottom-navigation"
+import { DraftsList } from "@/components/drafts-list"
 
 function HomePage() {
   const [activeTab, setActiveTab] = useState<"active" | "inactive" | "drafts">("active")
-  const [showDraftsButton, setShowDraftsButton] = useState(false)
+  const [showDrafts, setShowDrafts] = useState(false)
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
   const [notifiedCancelledParties, setNotifiedCancelledParties] = useState<Set<string>>(new Set())
   const router = useRouter()
   const { toast } = useToast()
+  const { parties, drafts } = useParties()
 
-  const liveParties = mockParties.filter((party) => party.status === "live")
-  const upcomingParties = mockParties.filter((party) => party.status === "upcoming")
-  const completedParties = mockParties.filter((party) => party.status === "completed")
-  const cancelledParties = mockParties.filter((party) => party.status === "cancelled")
-  const drafts = mockDrafts.filter((party) => party.status === "draft")
+  const liveParties = parties.filter((party) => party.status === "live")
+  const upcomingParties = parties.filter((party) => party.status === "upcoming")
+  const completedParties = parties.filter((party) => party.status === "completed")
+  const cancelledParties = parties.filter((party) => party.status === "cancelled")
+  const draftParties = drafts.filter((party) => party.status === "draft")
 
   // Load notified cancelled parties from localStorage on mount
   useEffect(() => {
@@ -78,7 +76,7 @@ function HomePage() {
 
   const handleCreateButtonPress = () => {
     const timer = setTimeout(() => {
-      setShowDraftsButton(true)
+      setShowDrafts(true)
     }, 500) // 500ms long press
     setLongPressTimer(timer)
   }
@@ -88,7 +86,7 @@ function HomePage() {
       clearTimeout(longPressTimer)
       setLongPressTimer(null)
     }
-    if (!showDraftsButton) {
+    if (!showDrafts) {
       router.push("/create-party")
     }
   }
@@ -98,7 +96,7 @@ function HomePage() {
       clearTimeout(longPressTimer)
       setLongPressTimer(null)
     }
-    setShowDraftsButton(false)
+    setShowDrafts(false)
   }
 
   const getStatusBadge = (status: Party["status"]) => {
@@ -162,19 +160,19 @@ function HomePage() {
     </Card>
   )
 
-// Add this inside your HomePage function (before the return statement)
-useEffect(() => {
-  async function testConnection() {
-    console.log('🔌 Testing Supabase connection...')
-    const { data, error } = await supabase.from('users').select('count').limit(1)
-    if (error) {
-      console.log('❌ Connection error:', error.message)
-    } else {
-      console.log('✅ Supabase connected successfully!')
+  // Test Supabase connection
+  useEffect(() => {
+    async function testConnection() {
+      console.log('🔌 Testing Supabase connection...')
+      const { data, error } = await supabase.from('users').select('count').limit(1)
+      if (error) {
+        console.log('❌ Connection error:', error.message)
+      } else {
+        console.log('✅ Supabase connected successfully!')
+      }
     }
-  }
-  testConnection()
-}, [])
+    testConnection()
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">
@@ -188,7 +186,7 @@ useEffect(() => {
           fomo
         </h1>
         <div className="flex items-center gap-2">
-          <NotificationIcon unreadCount={3} />
+          <NotificationIcon unreadCount={0} />
           <HamburgerMenu />
         </div>
       </header>
@@ -216,7 +214,7 @@ useEffect(() => {
               onClick={() => setActiveTab("drafts")}
               className="rounded-md"
             >
-              Drafts ({drafts.length})
+              Drafts ({draftParties.length})
             </Button>
           </div>
         </div>
@@ -279,11 +277,11 @@ useEffect(() => {
         ) : (
           <div className="space-y-8">
             {/* Drafts */}
-            {drafts.length > 0 && (
+            {draftParties.length > 0 && (
               <section>
                 <h2 className="text-2xl font-bold text-foreground mb-4">My Drafts</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {drafts.map((draft) => (
+                  {draftParties.map((draft) => (
                     <Card key={draft.id} className="hover:shadow-md transition-shadow">
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between mb-4">
@@ -331,7 +329,7 @@ useEffect(() => {
         {/* Empty State */}
         {((activeTab === "active" && liveParties.length === 0 && upcomingParties.length === 0) ||
           (activeTab === "inactive" && completedParties.length === 0 && cancelledParties.length === 0) ||
-          (activeTab === "drafts" && drafts.length === 0)) && (
+          (activeTab === "drafts" && draftParties.length === 0)) && (
           <div className="text-center text-muted-foreground mt-12">
             <div className="text-lg font-medium mb-2">No parties found</div>
             <p className="text-sm">
@@ -347,31 +345,21 @@ useEffect(() => {
 
       {/* Floating Action Button with Long Press */}
       <div className="fixed bottom-6 right-6 z-40">
-        {showDraftsButton && (
-          <Button
-            onClick={() => {
-              setShowDraftsButton(false)
-              router.push("/drafts")
-            }}
-            className="mb-3 h-12 px-4 rounded-full shadow-lg bg-yellow-500 hover:bg-yellow-600 text-white"
-            size="sm"
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            Drafts
-          </Button>
-        )}
         <Button
           onMouseDown={handleCreateButtonPress}
           onMouseUp={handleCreateButtonRelease}
           onMouseLeave={handleCreateButtonLeave}
           onTouchStart={handleCreateButtonPress}
           onTouchEnd={handleCreateButtonRelease}
-          className="h-14 w-14 rounded-full shadow-lg bg-primary hover:bg-primary/90"
+          className="h-14 w-14 rounded-full shadow-lg bg-pink-600 hover:bg-pink-700 z-40"
           size="icon"
         >
-          <Plus className="h-6 w-6 text-primary-foreground" />
+          <Plus className="h-6 w-6 text-white" />
         </Button>
       </div>
+
+      {/* Drafts Modal */}
+      <DraftsList isOpen={showDrafts} onClose={() => setShowDrafts(false)} />
     </div>
   )
 }
@@ -382,4 +370,4 @@ export default function ProtectedHomePage() {
       <HomePage />
     </ProtectedRoute>
   )
-}
+} 

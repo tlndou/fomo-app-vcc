@@ -14,7 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { ArrowLeft, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/context/supabase-auth-context"
+import { useAuth } from "@/context/auth-context"
 import { ProtectedRoute } from "@/components/protected-route"
 import { HamburgerMenu } from "@/components/hamburger-menu"
 import { NotificationIcon } from "@/components/notification-icon"
@@ -23,7 +23,16 @@ function SettingsPage() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
-  const { user, logout } = useAuth()
+  const { user, signOut } = useAuth()
+
+  const handleLogout = async () => {
+    try {
+      await signOut()
+      router.push("/login")
+    } catch (error) {
+      console.error("Logout error:", error)
+    }
+  }
 
   const handleDeleteAccount = async () => {
     if (deleteConfirmation !== "DELETE") {
@@ -36,7 +45,7 @@ function SettingsPage() {
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
     // Clear user data and redirect to login
-    logout()
+    handleLogout()
   }
 
   return (
@@ -49,7 +58,7 @@ function SettingsPage() {
           </Button>
           <h1 className="text-lg font-semibold text-foreground">Settings</h1>
           <div className="flex items-center gap-2">
-            <NotificationIcon unreadCount={3} />
+            <NotificationIcon unreadCount={0} />
             <HamburgerMenu />
           </div>
         </div>
@@ -75,10 +84,6 @@ function SettingsPage() {
               <div>
                 <div className="text-sm font-medium text-muted-foreground">Email</div>
                 <div className="text-sm text-foreground">{user?.email}</div>
-              </div>
-              <div>
-                <div className="text-sm font-medium text-muted-foreground">Star Sign</div>
-                <div className="text-sm text-foreground">{user?.starSign}</div>
               </div>
             </div>
           </CardContent>

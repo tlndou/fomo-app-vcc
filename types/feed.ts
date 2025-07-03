@@ -6,6 +6,10 @@ export interface User {
   location?: string
   friendStatus: "friends" | "pending" | "none" | "self"
   isHost?: boolean
+  bio?: string
+  joinDate?: string
+  starSign?: string
+  age?: number
 }
 
 export interface Reaction {
@@ -21,6 +25,8 @@ export interface Comment {
   user: User
   content: string
   timestamp: Date
+  likes: number
+  userLiked: boolean
   replies: Comment[]
   gifUrl?: string
 }

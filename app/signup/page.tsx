@@ -11,9 +11,10 @@ import { PasswordInput } from "@/components/ui/password-input"
 import { PasswordConfirmInput } from "@/components/ui/password-confirm-input"
 import { UsernameInput } from "@/components/ui/username-input"
 import Link from "next/link"
-import { useAuth } from "@/context/supabase-auth-context"
+import { useAuth } from "@/context/auth-context"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { validatePassword } from "@/lib/utils"
+import { validatePassword, getPasswordErrorMessage } from "@/lib/utils"
+import { useRouter } from "next/navigation"
 
 const starSigns = [
   "Aries",
@@ -39,7 +40,8 @@ export default function SignupPage() {
   const [age, setAge] = useState("")
   const [starSign, setStarSign] = useState("")
   const [error, setError] = useState("")
-  const { signup, isLoading } = useAuth()
+  const { signUp, loading } = useAuth()
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,7 +59,7 @@ export default function SignupPage() {
 
     const passwordValidation = validatePassword(password)
     if (!passwordValidation.isValid) {
-      setError("Password does not meet requirements. Please check the password requirements below.")
+      setError(getPasswordErrorMessage(passwordValidation))
       return
     }
 
@@ -72,13 +74,10 @@ export default function SignupPage() {
     }
 
     try {
-      await signup(name, username, email, password, age, starSign)
-    } catch (err: any) {
-      if (err.message === 'Username already taken') {
-        setError("Username is already taken. Please choose a different username.")
-      } else {
-        setError("Signup failed. Please try again.")
-      }
+      await signUp(email, password, name, username, starSign, Number.parseInt(age))
+      router.push("/")
+    } catch (err) {
+      setError("Failed to create account. Please try again.")
     }
   }
 
@@ -190,8 +189,8 @@ export default function SignupPage() {
             />
           </div>
 
-          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 mt-6" disabled={isLoading}>
-            {isLoading ? "Creating account..." : "Create account"}
+          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 mt-6" disabled={loading}>
+            {loading ? "Creating account..." : "Create account"}
           </Button>
         </form>
 

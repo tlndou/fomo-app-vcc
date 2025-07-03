@@ -43,7 +43,7 @@ export function LocationSelector({
   onClose, 
   onSelectLocation, 
   selectedLocation, 
-  partyLocationTags = mockPartyLocations,
+  partyLocationTags = [],
   partyName = "Party"
 }: LocationSelectorProps) {
   const [activeTab, setActiveTab] = useState<"party" | "nearby" | "current" | "custom">("party")

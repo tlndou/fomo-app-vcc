@@ -22,7 +22,7 @@ function HelpPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const router = useRouter()
-  const [unreadCount] = useState(3) // Mock unread count
+  const [unreadCount] = useState(0) // Mock unread count
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

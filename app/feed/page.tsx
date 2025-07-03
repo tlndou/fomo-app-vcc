@@ -9,6 +9,7 @@ import { MessagesTab } from "@/components/messages-tab"
 import { AnnouncementsTab } from "@/components/announcements-tab"
 import { FloatingActionButton } from "@/components/floating-action-button"
 import { NotificationIcon } from "@/components/notification-icon"
+import { DraftsList } from "@/components/drafts-list"
 import type { Post, User, Comment, FilterState, Notification } from "@/types/feed"
 import type { Party } from "@/types/party"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -17,48 +18,44 @@ import { ArrowLeft } from "lucide-react"
 import { ProtectedRoute } from "@/components/protected-route"
 import { HamburgerMenu } from "@/components/hamburger-menu"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw } from "lucide-react"
-
-// Mock data
-const currentUser: User = {
-  id: "current-user",
-  name: "You",
-  username: "you",
-  avatar: "/placeholder.svg?height=40&width=40",
-  friendStatus: "self",
-}
-
-const mockUsers: User[] = []
-
-const mockPosts: Post[] = []
-
-const mockNotifications: Notification[] = []
-
-const mockParties: Party[] = []
+import { RefreshCw, Plus } from "lucide-react"
+import { OfflineBanner } from "@/components/offline-banner"
+import { useParties } from "@/context/party-context"
+import { useAuth } from "@/context/auth-context"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Heart, MessageCircle, Share2, MoreHorizontal, MapPin, Calendar, Users } from "lucide-react"
 
 function FeedPage() {
   const [activeTab, setActiveTab] = useState<TabType>("feed")
-  const [posts, setPosts] = useState<Post[]>(mockPosts)
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications)
+  const [showDrafts, setShowDrafts] = useState(false)
+  const [posts, setPosts] = useState<Post[]>([])
+  const [notifications, setNotifications] = useState<Notification[]>([])
   const [filters, setFilters] = useState<FilterState>({})
   const [currentParty, setCurrentParty] = useState<Party | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [pullDistance, setPullDistance] = useState(0)
   const [isPulling, setIsPulling] = useState(false)
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const startY = useRef<number>(0)
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  const { getPartyById } = useParties()
+  const { user } = useAuth()
 
   // Get party from URL params
   useEffect(() => {
     const partyId = searchParams.get("party")
     if (partyId) {
-      const party = mockParties.find((p) => p.id === partyId)
+      const party = getPartyById(partyId)
       setCurrentParty(party || null)
     }
-  }, [searchParams])
+  }, [searchParams, getPartyById])
 
   // Handle tab parameter from URL (for party invites)
   useEffect(() => {
@@ -190,11 +187,21 @@ function FeedPage() {
   }
 
   const handleComment = (postId: string, content: string, parentId?: string, gifUrl?: string) => {
+    if (!user) return
+
     const newComment: Comment = {
       id: Date.now().toString(),
-      user: currentUser,
+      user: {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        avatar: user.avatar,
+        friendStatus: "self",
+      },
       content,
       timestamp: new Date(),
+      likes: 0,
+      userLiked: false,
       replies: [],
       gifUrl,
     }
@@ -205,11 +212,18 @@ function FeedPage() {
           if (parentId) {
             // Add reply to existing comment
             const addReplyToComment = (comments: Comment[]): Comment[] =>
-              comments.map((comment) =>
-                comment.id === parentId
-                  ? { ...comment, replies: [...comment.replies, newComment] }
-                  : { ...comment, replies: addReplyToComment(comment.replies) },
-              )
+              comments.map((comment) => {
+                if (comment.id === parentId) {
+                  return {
+                    ...comment,
+                    replies: [...comment.replies, newComment],
+                  }
+                }
+                return {
+                  ...comment,
+                  replies: addReplyToComment(comment.replies),
+                }
+              })
 
             return {
               ...post,
@@ -229,38 +243,34 @@ function FeedPage() {
   }
 
   const handleLocationClick = (location: string) => {
-    setFilters({ location })
-    setActiveTab("feed") // Switch to feed tab when filtering
+    setFilters((prev) => ({ ...prev, location }))
   }
 
   const handleTagClick = (tag: string) => {
-    setFilters({ tag })
-    setActiveTab("feed") // Switch to feed tab when filtering
+    setFilters((prev) => ({ ...prev, tag }))
   }
 
   const handleHashtagClick = (hashtag: string) => {
-    setFilters({ hashtag })
-    setActiveTab("feed") // Switch to feed tab when filtering
+    setFilters((prev) => ({ ...prev, hashtag }))
   }
 
   const handleUserClick = (userId: string) => {
-    // Navigate to user profile
     router.push(`/profile/${userId}`)
   }
 
   const handleSendFriendRequest = (userId: string) => {
-    console.log("Sending friend request to:", userId)
-    // Update user's friend status in posts
-    setPosts((prevPosts) =>
-      prevPosts.map((post) => ({
-        ...post,
-        user: post.user.id === userId ? { ...post.user, friendStatus: "pending" as const } : post.user,
-      })),
-    )
+    toast({
+      title: "Friend Request Sent",
+      description: "Your friend request has been sent!",
+    })
   }
 
   const handleClearFilter = (filterType: keyof FilterState) => {
-    setFilters((prev) => ({ ...prev, [filterType]: undefined }))
+    setFilters((prev) => {
+      const newFilters = { ...prev }
+      delete newFilters[filterType]
+      return newFilters
+    })
   }
 
   const handleClearAllFilters = () => {
@@ -268,21 +278,51 @@ function FeedPage() {
   }
 
   const handleNewPost = () => {
-    // Navigate to new post page
-    router.push("/new/post")
+    if (currentParty) {
+      router.push(`/new/post?party=${currentParty.id}`)
+    } else {
+      router.push("/new/post")
+    }
+  }
+
+  const handleCreateButtonPress = () => {
+    const timer = setTimeout(() => {
+      setShowDrafts(true)
+    }, 500)
+    setLongPressTimer(timer)
+  }
+
+  const handleCreateButtonRelease = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer)
+      setLongPressTimer(null)
+      handleNewPost()
+    }
+  }
+
+  const handleCreateButtonLeave = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer)
+      setLongPressTimer(null)
+    }
+  }
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab)
   }
 
   const handleSharePost = (postId: string, userId: string, message?: string) => {
-    console.log(`Sharing post ${postId} with user ${userId}`, message)
-    // In a real app, you would send this to your backend
-    alert(`Post shared with ${mockUsers.find((u) => u.id === userId)?.name || "user"}`)
+    toast({
+      title: "Post Shared",
+      description: "Post has been shared successfully!",
+    })
   }
 
   const handleDeletePost = (postId: string) => {
     setPosts((prevPosts) => prevPosts.filter((post) => post.id !== postId))
     toast({
       title: "Post Deleted",
-      description: "Your post has been deleted successfully.",
+      description: "Post has been deleted successfully!",
     })
   }
 
@@ -309,10 +349,6 @@ function FeedPage() {
         return post
       }),
     )
-    toast({
-      title: "Comment Deleted",
-      description: "Your comment has been deleted successfully.",
-    })
   }
 
   const handleExitParty = () => {
@@ -320,88 +356,46 @@ function FeedPage() {
   }
 
   const handlePartyCancelled = (partyId: string, partyName: string, cancelledBy: string) => {
-    // Create a cancellation announcement post
-    const cancellationPost: Post = {
-      id: `cancellation-${Date.now()}`,
-      user: {
-        id: "host",
-        name: cancelledBy,
-        username: "party_host",
-        avatar: "/placeholder.svg?height=40&width=40",
-        location: "Main Stage",
-        friendStatus: "none" as const,
-        isHost: true,
-      },
-      content: `🚫 ${partyName} has been cancelled. We apologize for any inconvenience.`,
-      tags: ["announcement", "cancelled"],
-      timestamp: new Date(),
-      reactions: [
-        { id: "1", emoji: "😔", label: "Sad", count: 0, userReacted: false },
-      ],
-      comments: [],
-      reposts: 0,
-      userReposted: false,
-    }
+    // Remove posts related to the cancelled party
+    setPosts((prevPosts) =>
+      prevPosts.filter((post) => {
+        // Remove posts that are specifically about this party
+        if (post.content.includes(partyName) && post.user.name === cancelledBy) {
+          return false
+        }
+        return true
+      }),
+    )
 
-    // Add the cancellation post to the posts list
-    setPosts(prevPosts => [cancellationPost, ...prevPosts])
+    // Update party status
+    setCurrentParty((prev) => prev && prev.id === partyId ? { ...prev, status: 'cancelled' } : prev)
 
-    // Create a notification for the cancellation
-    const cancellationNotification: Notification = {
-      id: `notification-${Date.now()}`,
-      type: "party_cancelled",
-      users: [{
-        id: "host",
-        name: cancelledBy,
-        username: "party_host",
-        avatar: "/placeholder.svg?height=40&width=40",
-        location: "Main Stage",
-        friendStatus: "none" as const,
-        isHost: true,
-      }],
-      timestamp: new Date(),
-      read: false,
-      partyId: partyId,
-      partyName: partyName,
-    }
-
-    // Add the notification to the notifications list
-    setNotifications(prevNotifications => [cancellationNotification, ...prevNotifications])
-
-    // Show toast notification
     toast({
       title: "Party Cancelled",
-      description: `${partyName} has been cancelled. All attendees have been notified.`,
+      description: `${partyName} has been cancelled by ${cancelledBy}`,
       variant: "destructive",
     })
   }
 
-  // Get posts based on active tab
-  const getTabPosts = () => {
-    switch (activeTab) {
-      case "starred":
-        return posts.filter((post) => post.user.friendStatus === "friends")
-      case "announcements":
-        return posts.filter((post) => post.user.isHost)
-      default:
-        return posts
-    }
+  const isHostOfParty = (party: Party) => {
+    return user && party.hosts.includes(user.name)
   }
 
-  // Filter posts based on current filters (only for feed and starred tabs)
+  const getTabPosts = () => {
+    if (activeTab === "starred") {
+      return posts.filter((post) => post.user.friendStatus === "friends")
+    }
+    return posts
+  }
+
   const getFilteredPosts = () => {
     const tabPosts = getTabPosts()
-
-    if (activeTab === "search" || activeTab === "messages" || activeTab === "announcements") {
-      return tabPosts // These tabs handle their own filtering
-    }
-
-    return tabPosts.filter((post) => {
-      if (filters.location && post.user.location !== filters.location) return false
-      if (filters.tag && !post.tags.includes(filters.tag)) return false
-      if (filters.hashtag && !post.content.includes(`#${filters.hashtag}`)) return false
-      return true
-    })
+          return tabPosts.filter((post) => {
+        if (filters.location && post.user.location !== filters.location) return false
+        if (filters.tag && !post.tags.includes(filters.tag)) return false
+        if (filters.hashtag && !post.content.includes(`#${filters.hashtag}`)) return false
+        return true
+      })
   }
 
   const filteredPosts = getFilteredPosts()
@@ -444,8 +438,17 @@ function FeedPage() {
   // Count unread notifications
   const unreadCount = notifications.filter((n) => !n.read).length
 
+  // Create a user object with friendStatus for components that require it
+  const currentUserWithStatus: User | null = user ? {
+    ...user,
+    friendStatus: "self" as const
+  } : null
+
   return (
     <div className="min-h-screen bg-background pb-20">
+      {/* Offline Banner */}
+      <OfflineBanner />
+      
       {/* Navbar with Exit Button */}
       <div className="bg-card border-b border-border px-4 py-3 sticky top-0 z-50">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
@@ -501,7 +504,7 @@ function FeedPage() {
           {activeTab === "search" ? (
             <SearchTab
               posts={posts}
-              currentUser={currentUser}
+              currentUser={currentUserWithStatus!}
               onReact={handleReact}
               onComment={handleComment}
               onLocationClick={handleLocationClick}
@@ -512,15 +515,15 @@ function FeedPage() {
               onSharePost={handleSharePost}
               onDeletePost={handleDeletePost}
               onDeleteComment={handleDeleteComment}
-              users={mockUsers}
+              users={[]}
             />
           ) : activeTab === "messages" ? (
-            <MessagesTab currentUser={currentUser} users={mockUsers} posts={posts} partyName={currentParty?.name} />
+            <MessagesTab currentUser={currentUserWithStatus!} users={[]} posts={posts} partyName={currentParty?.name} />
           ) : activeTab === "announcements" ? (
             <AnnouncementsTab
               posts={posts}
-              currentUser={currentUser}
-              users={mockUsers}
+              currentUser={currentUserWithStatus!}
+              users={[]}
               onReact={handleReact}
               onComment={handleComment}
               onLocationClick={handleLocationClick}
@@ -532,18 +535,19 @@ function FeedPage() {
               onDeletePost={handleDeletePost}
               onDeleteComment={handleDeleteComment}
               onPartyCancelled={handlePartyCancelled}
+              currentParty={currentParty}
             />
           ) : sortedPosts.length === 0 ? (
             <div className="text-center text-muted-foreground mt-8">
               {activeTab === "starred" && "No posts from friends yet."}
-              {activeTab === "feed" && "No posts found matching your filters."}
+              {activeTab === "feed" && "No posts found."}
             </div>
           ) : (
             sortedPosts.map((post) => (
               <PostItem
                 key={post.id}
                 post={post}
-                currentUser={currentUser}
+                currentUser={currentUserWithStatus!}
                 onReact={handleReact}
                 onComment={handleComment}
                 onLocationClick={handleLocationClick}
@@ -554,18 +558,33 @@ function FeedPage() {
                 onSharePost={handleSharePost}
                 onDeletePost={handleDeletePost}
                 onDeleteComment={handleDeleteComment}
-                users={mockUsers}
+                users={[]}
               />
             ))
           )}
         </div>
       </div>
 
-      {/* Floating Action Button */}
-      <FloatingActionButton onClick={handleNewPost} />
+      {/* Floating Action Button with Long Press */}
+      <div className="fixed bottom-24 right-6 z-40">
+        <Button
+          onMouseDown={handleCreateButtonPress}
+          onMouseUp={handleCreateButtonRelease}
+          onMouseLeave={handleCreateButtonLeave}
+          onTouchStart={handleCreateButtonPress}
+          onTouchEnd={handleCreateButtonRelease}
+          className="h-14 w-14 rounded-full shadow-lg bg-pink-600 hover:bg-pink-700 z-40"
+          size="icon"
+        >
+          <Plus className="h-6 w-6 text-white" />
+        </Button>
+      </div>
 
       {/* Bottom Navigation */}
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNavigation activeTab={activeTab} onTabChange={handleTabChange} showDrafts={false} />
+
+      {/* Drafts Modal */}
+      <DraftsList isOpen={showDrafts} onClose={() => setShowDrafts(false)} />
     </div>
   )
 }

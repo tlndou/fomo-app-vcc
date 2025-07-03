@@ -16,6 +16,8 @@ import { Calendar, MapPin, X, Copy, Check, Plus, Trash2 } from "lucide-react"
 import { HamburgerMenu } from "@/components/hamburger-menu"
 import { ProtectedRoute } from "@/components/protected-route"
 import type { LocationTag, UserTag, Invite, CoHost } from "@/types/party"
+import { useParties } from "@/context/party-context"
+import { useToast } from "@/hooks/use-toast"
 
 const tagColors = [
   "bg-pink-500",
@@ -28,14 +30,22 @@ const tagColors = [
   "bg-indigo-500",
 ]
 
-// Mock drafts data - in a real app, this would come from your database
-const mockDrafts: any[] = []
+// Generate unique party ID and invite link
+const generatePartyId = () => {
+  return `party_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+}
 
 function CreatePartyPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const draftId = searchParams.get('draft')
   const isEditing = !!draftId
+  const { addParty, saveDraft, updateDraft, publishDraft, getDraftById } = useParties()
+  const { toast } = useToast()
+
+  // Generate unique party ID and invite link
+  const [partyId] = useState(() => draftId || generatePartyId())
+  const [inviteLink] = useState(() => `https://fomo.app/invite/${partyId}`)
 
   // Basic Info State
   const [partyName, setPartyName] = useState("")
@@ -47,16 +57,10 @@ function CreatePartyPage() {
   // Collections State
   const [locationTags, setLocationTags] = useState<LocationTag[]>([])
   const [userTags, setUserTags] = useState<UserTag[]>([])
-  const [invites, setInvites] = useState<Invite[]>([
-    { id: "1", email: "alice@example.com", status: "approved" as const, name: "Alice" },
-    { id: "2", email: "bob@example.com", status: "pending" as const, name: "Bob" },
-  ])
-  const [coHosts, setCoHosts] = useState<CoHost[]>([
-    { id: "1", email: "sarah@example.com", name: "Sarah Johnson", avatar: "/placeholder.svg?height=40&width=40" },
-  ])
+  const [invites, setInvites] = useState<Invite[]>([])
+  const [coHosts, setCoHosts] = useState<CoHost[]>([])
 
   // UI State
-  const [inviteLink] = useState("https://fomo.app/party/abc123")
   const [linkCopied, setLinkCopied] = useState(false)
   const [requireApproval, setRequireApproval] = useState(true)
 
@@ -72,11 +76,11 @@ function CreatePartyPage() {
   // Load draft data if editing
   useEffect(() => {
     if (draftId) {
-      const draft = mockDrafts.find(d => d.id === draftId)
+      const draft = getDraftById(draftId)
       if (draft) {
-        setPartyName(draft.partyName || "")
-        setStartDate(draft.startDate || "")
-        setStartTime(draft.startTime || "")
+        setPartyName(draft.name || "")
+        setStartDate(draft.date || "")
+        setStartTime(draft.time || "")
         setLocation(draft.location || "")
         setDescription(draft.description || "")
         setLocationTags(draft.locationTags || [])
@@ -86,7 +90,7 @@ function CreatePartyPage() {
         setRequireApproval(draft.requireApproval ?? true)
       }
     }
-  }, [draftId])
+  }, [draftId, getDraftById])
 
   // Add Functions
   const addLocationTag = () => {
@@ -166,26 +170,90 @@ function CreatePartyPage() {
   }
 
   const handleSubmit = (isDraft = false) => {
+    // Validate required fields
+    if (!partyName.trim()) {
+      toast({
+        title: "Missing Party Name",
+        description: "Please enter a party name to continue.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!startDate) {
+      toast({
+        title: "Missing Date",
+        description: "Please select a date for your party.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!startTime) {
+      toast({
+        title: "Missing Time",
+        description: "Please select a time for your party.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!location.trim()) {
+      toast({
+        title: "Missing Location",
+        description: "Please enter a location for your party.",
+        variant: "destructive",
+      })
+      return
+    }
+
     const partyData = {
-      id: draftId || `draft-${Date.now()}`,
-      partyName,
-      startDate,
-      startTime,
-      location,
-      description,
+      name: partyName,
+      date: startDate,
+      time: startTime,
+      location: location,
+      description: description,
+      attendees: invites.filter(invite => invite.status === 'approved').length + 1, // +1 for creator
+      hosts: coHosts.length > 0 ? coHosts.map(coHost => coHost.name) : ["Host"], // Default to "Host" if no co-hosts
+      status: isDraft ? "draft" as const : "upcoming" as const,
       locationTags,
       userTags,
       invites,
       coHosts,
       requireApproval,
-      isDraft,
-      updatedAt: new Date().toISOString(),
     }
 
-    console.log(isEditing ? "Updating party:" : "Creating party:", partyData)
+    if (isEditing) {
+      if (isDraft) {
+        updateDraft(draftId, partyData)
+        toast({
+          title: "Draft Updated",
+          description: "Your party draft has been updated successfully.",
+        })
+      } else {
+        publishDraft(draftId)
+        toast({
+          title: "Party Published",
+          description: "Your party has been published and is now live!",
+        })
+      }
+    } else {
+      if (isDraft) {
+        saveDraft(partyData)
+        toast({
+          title: "Draft Saved",
+          description: "Your party draft has been saved successfully.",
+        })
+      } else {
+        addParty(partyData)
+        toast({
+          title: "Party Created",
+          description: "Your party has been created and is now live!",
+        })
+      }
+    }
 
-    // In a real app, you would send this to your backend
-    // For now, we'll just navigate back to the home page
+    // Navigate back to home page
     router.push("/")
   }
 
@@ -195,6 +263,18 @@ function CreatePartyPage() {
       action()
     }
   }
+
+  // Action buttons component to be used in all tabs
+  const ActionButtons = () => (
+    <div className="flex gap-4 pt-6 border-t mt-6">
+      <Button onClick={() => handleSubmit(true)} variant="outline" className="flex-1">
+        {isEditing ? "Update Draft" : "Save as Draft"}
+      </Button>
+      <Button onClick={() => handleSubmit(false)} className="flex-1">
+        {isEditing ? "Publish Party" : "Create Party"}
+      </Button>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-background animate-slide-up">
@@ -307,15 +387,7 @@ function CreatePartyPage() {
                   />
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-4 pt-4">
-                  <Button onClick={() => handleSubmit(true)} variant="outline" className="flex-1">
-                    {isEditing ? "Update Draft" : "Save as Draft"}
-                  </Button>
-                  <Button onClick={() => handleSubmit(false)} className="flex-1">
-                    {isEditing ? "Publish Party" : "Create Party"}
-                  </Button>
-                </div>
+                <ActionButtons />
               </CardContent>
             </Card>
           </TabsContent>
@@ -363,29 +435,37 @@ function CreatePartyPage() {
                 <div>
                   <Label>Invited People ({invites.length})</Label>
                   <div className="space-y-2 mt-2">
-                    {invites.map((invite) => (
-                      <div key={invite.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <div className="font-medium">{invite.name}</div>
-                          <div className="text-sm text-muted-foreground">{invite.email}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={invite.status === "approved" ? "default" : "secondary"}>
-                            {invite.status}
-                          </Badge>
-                          <Button
-                            onClick={() => removeInvite(invite.id)}
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                    {invites.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-8">
+                        <p>No invites yet. Add some people to get started!</p>
                       </div>
-                    ))}
+                    ) : (
+                      invites.map((invite) => (
+                        <div key={invite.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <div className="font-medium">{invite.name}</div>
+                            <div className="text-sm text-muted-foreground">{invite.email}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={invite.status === "approved" ? "default" : "secondary"}>
+                              {invite.status}
+                            </Badge>
+                            <Button
+                              onClick={() => removeInvite(invite.id)}
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
+
+                <ActionButtons />
               </CardContent>
             </Card>
           </TabsContent>
@@ -420,21 +500,29 @@ function CreatePartyPage() {
                 <div>
                   <Label>Location Tags ({locationTags.length})</Label>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {locationTags.map((tag) => (
-                      <Badge key={tag.id} variant="outline" className="flex items-center gap-1">
-                        {tag.name}
-                        <Button
-                          onClick={() => removeLocationTag(tag.id)}
-                          variant="ghost"
-                          size="sm"
-                          className="h-4 w-4 p-0 hover:bg-muted"
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </Badge>
-                    ))}
+                    {locationTags.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-8 w-full">
+                        <p>No location tags yet. Add some to help guests navigate your party!</p>
+                      </div>
+                    ) : (
+                      locationTags.map((tag) => (
+                        <Badge key={tag.id} variant="outline" className="flex items-center gap-1">
+                          {tag.name}
+                          <Button
+                            onClick={() => removeLocationTag(tag.id)}
+                            variant="ghost"
+                            size="sm"
+                            className="h-4 w-4 p-0 hover:bg-muted"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </Badge>
+                      ))
+                    )}
                   </div>
                 </div>
+
+                <ActionButtons />
               </CardContent>
             </Card>
           </TabsContent>
@@ -469,21 +557,29 @@ function CreatePartyPage() {
                 <div>
                   <Label>Post Tags ({userTags.length})</Label>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {userTags.map((tag) => (
-                      <Badge key={tag.id} className={`${tag.color} text-white flex items-center gap-1`}>
-                        {tag.name}
-                        <Button
-                          onClick={() => removeUserTag(tag.id)}
-                          variant="ghost"
-                          size="sm"
-                          className="h-4 w-4 p-0 hover:bg-muted"
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </Badge>
-                    ))}
+                    {userTags.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-8 w-full">
+                        <p>No post tags yet. Add some to help guests categorize their posts!</p>
+                      </div>
+                    ) : (
+                      userTags.map((tag) => (
+                        <Badge key={tag.id} className={`${tag.color} text-white flex items-center gap-1`}>
+                          {tag.name}
+                          <Button
+                            onClick={() => removeUserTag(tag.id)}
+                            variant="ghost"
+                            size="sm"
+                            className="h-4 w-4 p-0 hover:bg-muted"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </Badge>
+                      ))
+                    )}
                   </div>
                 </div>
+
+                <ActionButtons />
               </CardContent>
             </Card>
           </TabsContent>
@@ -519,30 +615,38 @@ function CreatePartyPage() {
                 <div>
                   <Label>Co-hosts ({coHosts.length})</Label>
                   <div className="space-y-2 mt-2">
-                    {coHosts.map((coHost) => (
-                      <div key={coHost.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="w-10 h-10">
-                            <AvatarImage src={coHost.avatar || "/placeholder.svg"} />
-                            <AvatarFallback>{coHost.name[0]}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium">{coHost.name}</div>
-                            <div className="text-sm text-muted-foreground">{coHost.email}</div>
-                          </div>
-                        </div>
-                        <Button
-                          onClick={() => removeCoHost(coHost.id)}
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                    {coHosts.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-8">
+                        <p>No co-hosts yet. Add some to help manage your party!</p>
                       </div>
-                    ))}
+                    ) : (
+                      coHosts.map((coHost) => (
+                        <div key={coHost.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-10 h-10">
+                              <AvatarImage src={coHost.avatar || "/placeholder.svg"} />
+                              <AvatarFallback>{coHost.name[0]}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="font-medium">{coHost.name}</div>
+                              <div className="text-sm text-muted-foreground">{coHost.email}</div>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => removeCoHost(coHost.id)}
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
+
+                <ActionButtons />
               </CardContent>
             </Card>
           </TabsContent>

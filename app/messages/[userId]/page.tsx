@@ -178,7 +178,7 @@ function ChatPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <NotificationIcon unreadCount={3} />
+            <NotificationIcon unreadCount={0} />
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
               <MoreVertical className="h-4 w-4" />
             </Button>

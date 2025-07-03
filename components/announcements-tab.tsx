@@ -1,12 +1,14 @@
 "use client"
 import { Megaphone, Calendar, MapPin, Users, X } from "lucide-react"
 import { PostItem } from "./post-item"
-import type { Post, User } from "@/types/feed"
+import type { Post, User, Comment } from "@/types/feed"
+import type { Party } from "@/types/party"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
 
 interface AnnouncementsTabProps {
@@ -24,6 +26,7 @@ interface AnnouncementsTabProps {
   onDeletePost: (postId: string) => void
   onDeleteComment: (postId: string, commentId: string) => void
   onPartyCancelled?: (partyId: string, partyName: string, cancelledBy: string) => void
+  currentParty?: Party | null
 }
 
 export function AnnouncementsTab({
@@ -41,27 +44,14 @@ export function AnnouncementsTab({
   onDeletePost,
   onDeleteComment,
   onPartyCancelled,
+  currentParty,
 }: AnnouncementsTabProps) {
   const announcementPosts = posts.filter((post) => post.user.isHost)
   const [activeSubTab, setActiveSubTab] = useState<"announcements" | "details">("announcements")
   const { toast } = useToast()
 
-  // Mock party data - in a real app, this would come from props or context
-  const partyData = {
-    id: "1",
-    name: "Sarah's Birthday Bash",
-    date: "Saturday, January 20, 2024",
-    time: "7:00 PM",
-    location: "The Rooftop Bar, 123 Main St, Downtown",
-    attendees: 23,
-    maxAttendees: 50,
-    hosts: ["Sarah Chen", "Mike Rodriguez", "Alex Kim"],
-    status: "live" as const,
-    description: "Join us for a night of celebration, music, and fun!"
-  }
-
   // Check if current user is a host
-  const isHost = partyData.hosts.some(host => 
+  const isHost = currentParty?.hosts.some(host => 
     host.toLowerCase().includes(currentUser.name.toLowerCase()) || 
     currentUser.name.toLowerCase().includes(host.toLowerCase())
   )
@@ -70,10 +60,10 @@ export function AnnouncementsTab({
     // In a real app, you would update the party status in the database
     // and send notifications to all attendees
     
-    console.log("Party cancelled:", partyData.id)
+    console.log("Party cancelled:", currentParty?.id)
 
     if (onPartyCancelled) {
-      onPartyCancelled(partyData.id, partyData.name, currentUser.name)
+      onPartyCancelled(currentParty?.id || "", currentParty?.name || "", currentUser.name)
     }
   }
 
@@ -125,11 +115,11 @@ export function AnnouncementsTab({
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <h2 className="text-xl font-bold">Party Information</h2>
-                {getStatusBadge(partyData.status)}
+                {getStatusBadge(currentParty?.status || "")}
               </div>
               
-              {partyData.description && (
-                <p className="text-muted-foreground mb-6">{partyData.description}</p>
+              {currentParty?.description && (
+                <p className="text-muted-foreground mb-6">{currentParty.description}</p>
               )}
 
               <div className="space-y-4">
@@ -137,28 +127,28 @@ export function AnnouncementsTab({
                   <Calendar className="w-5 h-5 text-purple-600" />
                   <div>
                     <div className="font-medium">Date & Time</div>
-                    <div className="text-muted-foreground">{partyData.date} at {partyData.time}</div>
+                    <div className="text-muted-foreground">{currentParty?.date} at {currentParty?.time}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <MapPin className="w-5 h-5 text-purple-600" />
                   <div>
                     <div className="font-medium">Location</div>
-                    <div className="text-muted-foreground">{partyData.location}</div>
+                    <div className="text-muted-foreground">{currentParty?.location}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Users className="w-5 h-5 text-purple-600" />
                   <div>
                     <div className="font-medium">Attendees</div>
-                    <div className="text-muted-foreground">{partyData.attendees} going, {partyData.maxAttendees - partyData.attendees} spots left</div>
+                    <div className="text-muted-foreground">{currentParty?.attendees || 0} going</div>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Users className="w-5 h-5 text-purple-600 mt-0.5" />
                   <div>
                     <div className="font-medium">Hosted by</div>
-                    <div className="text-muted-foreground">{partyData.hosts.join(", ")}</div>
+                    <div className="text-muted-foreground">{currentParty?.hosts.join(", ")}</div>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -195,7 +185,7 @@ export function AnnouncementsTab({
                 </div>
 
                 {/* Host Actions */}
-                {isHost && partyData.status === "live" && (
+                {isHost && currentParty?.status === "live" && (
                   <div className="pt-4 border-t">
                     <div className="flex gap-3">
                       <Button variant="outline" className="flex-1">
@@ -214,7 +204,7 @@ export function AnnouncementsTab({
                           <AlertDialogHeader>
                             <AlertDialogTitle>Cancel Party</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Are you sure you want to cancel "{partyData.name}"? This action cannot be undone and all attendees will be notified.
+                              Are you sure you want to cancel "{currentParty?.name}"? This action cannot be undone and all attendees will be notified.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
