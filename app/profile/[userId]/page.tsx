@@ -387,17 +387,26 @@ function ProfilePage() {
             {/* Bio */}
             {user.bio && <p className="text-gray-700 mb-6 max-w-md mx-auto">{user.bio}</p>}
 
-            {/* Join Date - only show if it has a value */}
-            {user.joinDate && (
+            {/* Join Date and Star Sign - only show if they have values */}
+            {(user.joinDate || user.starSign) && (
               <>
                 <div className="flex justify-center gap-8 text-sm text-gray-500">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    <span>Joined</span>
-                  </div>
+                  {user.joinDate && (
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      <span>Joined</span>
+                    </div>
+                  )}
+                  {user.starSign && (
+                    <div className="flex items-center gap-1">
+                      <Sparkles className="w-4 h-4" />
+                      <span>Star Sign</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex justify-center gap-8 text-sm font-medium mt-1">
-                  <span>{user.joinDate}</span>
+                  {user.joinDate && <span>{user.joinDate}</span>}
+                  {user.starSign && <span>{user.starSign}</span>}
                 </div>
               </>
             )}

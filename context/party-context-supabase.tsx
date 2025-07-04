@@ -54,59 +54,33 @@ export function PartyProvider({ children }: PartyProviderProps) {
       try {
         setLoading(true)
         
-        // Step 4: Check if we need to migrate from localStorage
-        const hasLocalParties = localStorage.getItem(`fomo-parties-${user.id}`)
-        const hasLocalDrafts = localStorage.getItem(`fomo-drafts-${user.id}`)
+        // Check if we need to migrate from localStorage
+        const hasLocalData = localStorage.getItem(`fomo-parties-${user.id}`) || localStorage.getItem(`fomo-drafts-${user.id}`)
         
-        if (hasLocalParties || hasLocalDrafts) {
-          console.log('Migrating data from localStorage to Supabase...')
-          try {
-            await migrateFromLocalStorage()
-            console.log('Migration completed successfully')
-          } catch (error) {
-            console.error('Migration failed:', error)
-            // Continue loading data even if migration fails
-          }
+        if (hasLocalData) {
+          await migrateFromLocalStorage()
         }
         
         // Load parties and drafts from Supabase
-        console.log('Loading parties and drafts from Supabase...')
         const [partiesData, draftsData] = await Promise.all([
           partyService.getParties(user.id),
           partyService.getDrafts(user.id)
         ])
         
-        console.log('Loaded parties:', partiesData)
-        console.log('Loaded drafts:', draftsData)
-        
         setParties(partiesData)
         setDrafts(draftsData)
         
-        // Step 5: Enable real-time updates with subscription
-        console.log('Setting up real-time subscriptions...')
+        // Subscribe to real-time updates
         const subscription = partyService.subscribeToParties((payload) => {
-          console.log('Real-time update received:', payload)
-          
-          // Convert database fields to frontend format
-          const convertParty = (party: any) => ({
-            ...party,
-            locationTags: party.location_tags,
-            userTags: party.user_tags,
-            coHosts: party.co_hosts,
-            requireApproval: party.require_approval,
-            createdAt: party.created_at,
-            updatedAt: party.updated_at
-          })
-          
           if (payload.eventType === 'INSERT') {
-            const newParty = convertParty(payload.new)
+            const newParty = payload.new
             if (newParty.status === 'draft') {
               setDrafts(prev => [newParty, ...prev])
             } else {
               setParties(prev => [newParty, ...prev])
             }
           } else if (payload.eventType === 'UPDATE') {
-            const updatedParty = convertParty(payload.new)
+            const updatedParty = payload.new
             if (updatedParty.status === 'draft') {
               setDrafts(prev => prev.map(draft => draft.id === updatedParty.id ? updatedParty : draft))
             } else {
@@ -120,7 +94,6 @@ export function PartyProvider({ children }: PartyProviderProps) {
         })
         
         return () => {
-          console.log('Cleaning up real-time subscription...')
           subscription.unsubscribe()
         }
       } catch (error) {
@@ -132,43 +105,6 @@ export function PartyProvider({ children }: PartyProviderProps) {
 
     loadData()
   }, [user?.id])
-
-  // Update party status based on start date
-  useEffect(() => {
-    const updatePartyStatus = () => {
-      const now = new Date()
-      const updatedParties = parties.map(party => {
-        const startDate = new Date(`${party.date} ${party.time}`)
-        if (party.status === 'upcoming' && now >= startDate) {
-          return { ...party, status: 'live' as const }
-        }
-        return party
-      })
-      
-      const hasChanges = updatedParties.some((party, index) => party.status !== parties[index]?.status)
-      
-      if (hasChanges) {
-        setParties(updatedParties)
-        // Update parties in Supabase
-        updatedParties.forEach(async (party) => {
-          if (party.status !== parties.find(p => p.id === party.id)?.status) {
-            try {
-              await partyService.updateParty(party.id, { status: party.status })
-            } catch (error) {
-              console.error('Error updating party status:', error)
-            }
-          }
-        })
-      }
-    }
-
-    updatePartyStatus()
-    
-    // Check every minute for status updates
-    const interval = setInterval(updatePartyStatus, 60000)
-    
-    return () => clearInterval(interval)
-  }, [parties])
 
   const addParty = async (partyData: Omit<Party, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
@@ -267,8 +203,8 @@ export function PartyProvider({ children }: PartyProviderProps) {
       const completedParty = await partyService.completeParty(id)
       
       // Update user stats for hosts and attendees
-      const hosts = completedParty.hosts || []
-      const attendees = completedParty.invites?.map((invite: Invite) => invite.name) || []
+      const hosts = completedParty.hosts
+      const attendees = completedParty.invites?.map((invite: any) => invite.name) || []
 
       // Get current user stats from localStorage
       const userStatsData = localStorage.getItem('fomo-user-stats')
