@@ -22,6 +22,7 @@ import { RefreshCw, Plus } from "lucide-react"
 import { OfflineBanner } from "@/components/offline-banner"
 import { useParties } from "@/context/party-context"
 import { useAuth } from "@/context/auth-context"
+import { postService } from "@/lib/party-service"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -57,6 +58,72 @@ function FeedPage() {
     }
   }, [searchParams, getPartyById])
 
+  // Load posts from localStorage when current party changes
+  useEffect(() => {
+    const loadPosts = async () => {
+      if (currentParty && user) {
+        try {
+          // Check if we need to migrate posts from localStorage
+          const postsKey = `posts_${currentParty.id}_${user.id}`
+          const hasLocalPosts = localStorage.getItem(postsKey)
+          
+          if (hasLocalPosts) {
+            console.log('Migrating posts from localStorage to Supabase...')
+            try {
+              await postService.migratePostsFromLocalStorage(currentParty.id, user.id)
+              console.log('Post migration completed successfully')
+            } catch (error) {
+              console.error('Post migration failed:', error)
+            }
+          }
+          
+          // Load posts from Supabase
+          const postsData = await postService.getPosts(currentParty.id, user.id)
+          setPosts(postsData)
+          
+          // Set up real-time subscription for posts
+          const subscription = postService.subscribeToPosts(currentParty.id, (payload) => {
+            console.log('Real-time post update received:', payload)
+            
+            // Convert database fields to frontend format
+            const convertPost = (post: any) => ({
+              ...post,
+              userId: post.user_id,
+              userName: post.user_name,
+              userUsername: post.user_username,
+              userAvatar: post.user_avatar,
+              gifUrl: post.gif_url,
+              userReposted: post.user_reposted,
+              timestamp: new Date(post.created_at)
+            })
+            
+            if (payload.eventType === 'INSERT') {
+              const newPost = convertPost(payload.new)
+              setPosts(prev => [newPost, ...prev])
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedPost = convertPost(payload.new)
+              setPosts(prev => prev.map(post => post.id === updatedPost.id ? updatedPost : post))
+            } else if (payload.eventType === 'DELETE') {
+              const deletedPost = payload.old
+              setPosts(prev => prev.filter(post => post.id !== deletedPost.id))
+            }
+          })
+          
+          return () => {
+            subscription.unsubscribe()
+          }
+        } catch (error) {
+          console.error('Error loading posts:', error)
+          setPosts([])
+        }
+      } else {
+        setPosts([])
+      }
+    }
+
+    loadPosts()
+  }, [currentParty, user])
+
   // Handle tab parameter from URL (for party invites)
   useEffect(() => {
     const tab = searchParams.get("tab")
@@ -64,20 +131,6 @@ function FeedPage() {
       setActiveTab("announcements")
     }
   }, [searchParams])
-
-  // Check for new post from sessionStorage on component mount
-  useEffect(() => {
-    const newPostData = sessionStorage.getItem("newPost")
-    if (newPostData) {
-      const newPost = JSON.parse(newPostData)
-      // Convert timestamp back to Date object
-      newPost.timestamp = new Date(newPost.timestamp)
-      setPosts((prevPosts) => [newPost, ...prevPosts])
-      sessionStorage.removeItem("newPost")
-      // Scroll to top to show the new post
-      window.scrollTo({ top: 0, behavior: "smooth" })
-    }
-  }, [])
 
   // Pull-to-refresh handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -281,7 +334,7 @@ function FeedPage() {
     if (currentParty) {
       router.push(`/new/post?party=${currentParty.id}`)
     } else {
-      router.push("/new/post")
+    router.push("/new/post")
     }
   }
 
@@ -383,19 +436,19 @@ function FeedPage() {
 
   const getTabPosts = () => {
     if (activeTab === "starred") {
-      return posts.filter((post) => post.user.friendStatus === "friends")
+        return posts.filter((post) => post.user.friendStatus === "friends")
     }
     return posts
   }
 
   const getFilteredPosts = () => {
     const tabPosts = getTabPosts()
-          return tabPosts.filter((post) => {
-        if (filters.location && post.user.location !== filters.location) return false
-        if (filters.tag && !post.tags.includes(filters.tag)) return false
-        if (filters.hashtag && !post.content.includes(`#${filters.hashtag}`)) return false
-        return true
-      })
+    return tabPosts.filter((post) => {
+      if (filters.location && post.user.location !== filters.location) return false
+      if (filters.tag && !post.tags.includes(filters.tag)) return false
+      if (filters.hashtag && !post.content.includes(`#${filters.hashtag}`)) return false
+      return true
+    })
   }
 
   const filteredPosts = getFilteredPosts()

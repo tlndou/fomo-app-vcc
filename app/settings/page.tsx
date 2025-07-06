@@ -12,18 +12,23 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, Trash2 } from "lucide-react"
+import { ArrowLeft, Trash2, Download, Upload, RefreshCw } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/context/auth-context"
+import { useParties } from "@/context/party-context"
 import { ProtectedRoute } from "@/components/protected-route"
 import { HamburgerMenu } from "@/components/hamburger-menu"
 import { NotificationIcon } from "@/components/notification-icon"
+import { useToast } from "@/hooks/use-toast"
 
 function SettingsPage() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
   const router = useRouter()
   const { user, signOut } = useAuth()
+  const { exportData, importData } = useParties()
+  const { toast } = useToast()
 
   const handleLogout = async () => {
     try {
@@ -32,6 +37,67 @@ function SettingsPage() {
     } catch (error) {
       console.error("Logout error:", error)
     }
+  }
+
+  const handleExportData = () => {
+    try {
+      const data = exportData()
+      const blob = new Blob([data], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `fomo-data-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      toast({
+        title: "Data Exported",
+        description: "Your data has been exported successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: "Failed to export your data. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result as string
+        const success = importData(data)
+        
+        if (success) {
+          toast({
+            title: "Data Imported",
+            description: "Your data has been imported successfully. Please refresh the page.",
+          })
+          // Refresh the page to show imported data
+          setTimeout(() => window.location.reload(), 1000)
+        } else {
+          toast({
+            title: "Import Failed",
+            description: "Failed to import data. Please check the file format.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        toast({
+          title: "Import Failed",
+          description: "Failed to import data. Please check the file format.",
+          variant: "destructive",
+        })
+      }
+    }
+    reader.readAsText(file)
   }
 
   const handleDeleteAccount = async () => {
@@ -112,6 +178,42 @@ function SettingsPage() {
               </div>
               <Button variant="outline" size="sm">
                 Disabled
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Data Sync */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Data Sync</CardTitle>
+            <CardDescription>Export and import your data</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">Export Data</div>
+                <div className="text-sm text-muted-foreground">Export your data to a file</div>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleExportData}>
+                Export
+              </Button>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">Import Data</div>
+                <div className="text-sm text-muted-foreground">Import data from a file</div>
+              </div>
+              <Button variant="outline" size="sm" asChild>
+                <label>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportData}
+                    className="hidden"
+                  />
+                  Import
+                </label>
               </Button>
             </div>
           </CardContent>
