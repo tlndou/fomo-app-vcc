@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Camera, Upload, X, Play, Loader2, CheckCircle, XCircle } from "lucide-react"
+import { Camera, Upload, X, Play, Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 import { useMediaCompression } from "@/hooks/use-media-compression"
 
 interface MediaPickerProps {
@@ -150,6 +150,17 @@ export function MediaPicker({ isOpen, onClose, onSelectMedia, selectedMedia }: M
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm font-medium">Compressing media...</span>
               </div>
+              
+              {/* Video processing warning */}
+              {progress.fileName.match(/\.(mp4|mov|avi|mkv|webm)$/i) && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <span className="font-medium">Video Processing:</span> Videos longer than 60 seconds will be automatically trimmed to the first 60 seconds.
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
                   <span>Overall Progress</span>
@@ -259,8 +270,13 @@ export function MediaPicker({ isOpen, onClose, onSelectMedia, selectedMedia }: M
               />
 
               {/* Info text */}
-              <div className="text-xs text-gray-500 text-center">
-                Photos and videos will be automatically compressed for optimal performance
+              <div className="text-xs text-gray-500 text-center space-y-1">
+                <p>Photos and videos will be automatically compressed for optimal performance</p>
+                <div className="flex items-center justify-center gap-4">
+                  <span>📸 Images: max 1080px, <2MB</span>
+                  <span>🎥 Videos: max 60s, <25MB</span>
+                </div>
+                <p className="text-red-500 font-medium">Videos longer than 60 seconds will be trimmed</p>
               </div>
             </div>
           )}
