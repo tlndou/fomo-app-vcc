@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useParties } from "@/context/party-context"
 import { useAuth } from "@/context/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import { postService } from "@/lib/party-service"
 import { X, Image, MapPin, Tag, BarChart3 } from "lucide-react"
 import { Post } from "@/types/feed"
 import { GifPicker } from "@/components/gif-picker"
@@ -79,7 +80,7 @@ export function NewPostContentArea({
       {isQuoteRepost && (
         <div className="flex items-center gap-2 mb-4 text-gray-500">
           <span className="text-sm">Quote Repost</span>
-        </div>
+            </div>
       )}
 
       {/* Selected Location */}
@@ -93,24 +94,24 @@ export function NewPostContentArea({
           >
             ×
           </button>
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* Post content */}
+        {/* Post content */}
       <textarea
-        value={content}
+          value={content}
         onChange={(e) => onContentChange(e.target.value)}
         placeholder={placeholder}
         className="w-full border-none resize-none text-lg focus-visible:ring-0 focus-visible:ring-offset-0 min-h-[160px] bg-transparent"
-        maxLength={maxLength}
-      />
+          maxLength={maxLength}
+        />
 
-      {/* Selected Tags */}
-      {selectedTags.length > 0 && (
-        <div className="flex flex-wrap gap-2 mt-3">
-          {selectedTags.map((tag) => (
+        {/* Selected Tags */}
+        {selectedTags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {selectedTags.map((tag) => (
             <div key={tag} className="flex items-center gap-1 bg-gray-200 px-2 py-1 rounded-full text-sm">
-              {tag}
+                {tag}
               <button
                 onClick={() => onRemoveTag(tag)}
                 className="h-4 w-4 p-0 hover:bg-gray-300 rounded-full flex items-center justify-center"
@@ -118,79 +119,79 @@ export function NewPostContentArea({
                 ×
               </button>
             </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {/* Selected GIF */}
-      {selectedGif && (
-        <div className="mt-3 relative inline-block">
-          <img src={selectedGif || "/placeholder.svg"} alt="Selected GIF" className="max-w-48 rounded-lg" />
+        {/* Selected GIF */}
+        {selectedGif && (
+          <div className="mt-3 relative inline-block">
+            <img src={selectedGif || "/placeholder.svg"} alt="Selected GIF" className="max-w-48 rounded-lg" />
           <Button variant="destructive" size="sm" onClick={onRemoveGif} className="absolute top-1 right-1 h-6 w-6 p-0">
             ×
-          </Button>
-        </div>
-      )}
-
-      {/* Selected Media */}
-      {selectedMedia && (
-        <div className="mt-3 relative inline-block">
-          {selectedMedia.type === "image" ? (
-            <img
-              src={selectedMedia.url || "/placeholder.svg"}
-              alt="Selected media"
-              className="max-w-full max-h-64 rounded-lg"
-            />
-          ) : (
-            <video src={selectedMedia.url} controls className="max-w-full max-h-64 rounded-lg" />
-          )}
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={onRemoveMedia}
-            className="absolute top-1 right-1 h-6 w-6 p-0"
-          >
-            ×
-          </Button>
-        </div>
-      )}
-
-      {/* Poll Preview */}
-      {poll && (
-        <div className="mt-3 border border-gray-200 rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4" />
-              <span className="text-sm font-medium capitalize">{poll.type} Poll</span>
-            </div>
-            <Button variant="ghost" size="sm" onClick={onRemovePoll} className="h-6 w-6 p-0">
-              ×
             </Button>
           </div>
-          <div className="text-sm font-medium mb-2">{poll.question}</div>
-          {poll.type !== "question" && (
-            <div className="space-y-1">
-              {poll.options.map((option) => (
-                <div key={option.id} className="text-xs text-gray-600">
-                  • {option.text}
+        )}
+
+        {/* Selected Media */}
+        {selectedMedia && (
+          <div className="mt-3 relative inline-block">
+            {selectedMedia.type === "image" ? (
+              <img
+                src={selectedMedia.url || "/placeholder.svg"}
+                alt="Selected media"
+                className="max-w-full max-h-64 rounded-lg"
+              />
+            ) : (
+              <video src={selectedMedia.url} controls className="max-w-full max-h-64 rounded-lg" />
+            )}
+            <Button
+              variant="destructive"
+              size="sm"
+            onClick={onRemoveMedia}
+              className="absolute top-1 right-1 h-6 w-6 p-0"
+            >
+            ×
+            </Button>
+          </div>
+        )}
+
+        {/* Poll Preview */}
+        {poll && (
+        <div className="mt-3 border border-gray-200 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" />
+                  <span className="text-sm font-medium capitalize">{poll.type} Poll</span>
                 </div>
-              ))}
-            </div>
-          )}
+            <Button variant="ghost" size="sm" onClick={onRemovePoll} className="h-6 w-6 p-0">
+              ×
+                </Button>
+              </div>
+              <div className="text-sm font-medium mb-2">{poll.question}</div>
+              {poll.type !== "question" && (
+                <div className="space-y-1">
+                  {poll.options.map((option) => (
+                <div key={option.id} className="text-xs text-gray-600">
+                      • {option.text}
+                    </div>
+                  ))}
+                </div>
+              )}
         </div>
       )}
 
       {/* Quoted Post Preview (for quote reposts) */}
       {quotedPost && (
         <div className="mt-4 border border-gray-200 rounded-lg p-3">
-          <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3">
             <img
               src={quotedPost.user.avatar || "/placeholder.svg"}
               alt={quotedPost.user.name}
               className="w-8 h-8 rounded-full"
             />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
                 <span className="font-medium text-sm">{quotedPost.user.name}</span>
                 <span className="text-gray-500 text-xs">@{quotedPost.user.username}</span>
                 <span className="text-gray-400 text-xs">·</span>
@@ -198,18 +199,18 @@ export function NewPostContentArea({
                   {quotedPost.timestamp instanceof Date
                     ? getRelativeTime(quotedPost.timestamp)
                     : getRelativeTime(new Date(quotedPost.timestamp))}
-                </span>
-              </div>
+                    </span>
+                  </div>
               <p className="text-sm text-gray-900 line-clamp-3">{quotedPost.content}</p>
 
               {/* Media placeholder for quoted post */}
               {quotedPost.media && (
                 <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 text-center mt-2">
                   <div className="text-gray-400 text-xs">📷 Original media</div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
         </div>
       )}
     </div>
@@ -274,38 +275,19 @@ export default function NewPostPage() {
     setIsSubmitting(true)
 
     try {
-      // Create new post
-      const newPost: Post = {
-        id: Date.now().toString(),
-        user: {
-          id: user.id,
-          name: user.name,
-          username: user.username,
-          avatar: user.avatar || "/placeholder-user.jpg",
-          friendStatus: "self",
-          location: selectedLocation || undefined,
-        },
+      // Create new post using Supabase
+      const newPost = await postService.createPost({
+        userId: user.id,
+        userName: user.name,
+        userUsername: user.username,
+        userAvatar: user.avatar || "/placeholder-user.jpg",
         content: content.trim(),
-        timestamp: new Date(),
-        comments: [],
         media: imagePreview || undefined,
         gifUrl: selectedGif || undefined,
         tags: selectedTags,
-        reactions: [],
-        reposts: 0,
-        userReposted: false,
         poll: poll || undefined,
-      }
-
-      // Get existing posts from localStorage
-      const existingPosts = localStorage.getItem(`posts_${partyId}`)
-      const posts = existingPosts ? JSON.parse(existingPosts) : []
-      
-      // Add new post to the beginning of the array
-      const updatedPosts = [newPost, ...posts]
-      
-      // Save back to localStorage
-      localStorage.setItem(`posts_${partyId}`, JSON.stringify(updatedPosts))
+        location: selectedLocation || undefined,
+      }, currentParty.id)
 
       toast({
         title: "Post created!",
@@ -315,6 +297,7 @@ export default function NewPostPage() {
       // Navigate back to feed
       router.push(`/feed?party=${partyId}`)
     } catch (error) {
+      console.error('Error creating post:', error)
       toast({
         title: "Error",
         description: "Failed to create post. Please try again.",
@@ -428,29 +411,29 @@ export default function NewPostPage() {
               </Button>
             </label>
             
-            <Button 
-              variant="ghost" 
+          <Button
+            variant="ghost"
               size="icon"
               onClick={() => setShowGifPicker(true)}
-            >
+          >
               <span className="text-xs font-bold">GIF</span>
-            </Button>
+          </Button>
             
-            <Button 
-              variant="ghost" 
+          <Button
+            variant="ghost"
               size="icon"
               onClick={() => setShowTagSelector(true)}
-            >
+          >
               <Tag className="h-5 w-5" />
-            </Button>
+          </Button>
 
-            <Button 
-              variant="ghost" 
+          <Button
+            variant="ghost"
               size="icon"
-              onClick={() => setShowPollCreator(true)}
-            >
+            onClick={() => setShowPollCreator(true)}
+          >
               <BarChart3 className="h-5 w-5" />
-            </Button>
+          </Button>
           </div>
 
           <div className="text-sm text-gray-500">
@@ -482,13 +465,13 @@ export default function NewPostPage() {
       )}
 
       {showPollCreator && (
-        <PollCreator
-          isOpen={showPollCreator}
+      <PollCreator
+        isOpen={showPollCreator}
           onCreatePoll={(newPoll) => {
             setPoll(newPoll)
             setShowPollCreator(false)
           }}
-          onClose={() => setShowPollCreator(false)}
+        onClose={() => setShowPollCreator(false)}
         />
       )}
 
