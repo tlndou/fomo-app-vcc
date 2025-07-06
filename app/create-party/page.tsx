@@ -12,12 +12,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, MapPin, X, Copy, Check, Plus, Trash2 } from "lucide-react"
+import { Calendar, MapPin, X, Copy, Check, Plus, Trash2, User, Users } from "lucide-react"
 import { HamburgerMenu } from "@/components/hamburger-menu"
 import { ProtectedRoute } from "@/components/protected-route"
 import type { LocationTag, UserTag, Invite, CoHost } from "@/types/party"
 import { useParties } from "@/context/party-context"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/context/auth-context"
 
 const tagColors = [
   "bg-pink-500",
@@ -42,6 +43,7 @@ function CreatePartyPage() {
   const isEditing = !!draftId
   const { addParty, saveDraft, updateDraft, publishDraft, getDraftById } = useParties()
   const { toast } = useToast()
+  const { currentUser } = useAuth()
 
   // Generate unique party ID and invite link
   const [partyId] = useState(() => draftId || generatePartyId())
@@ -214,7 +216,7 @@ function CreatePartyPage() {
       location: location,
       description: description,
       attendees: invites.filter(invite => invite.status === 'approved').length + 1, // +1 for creator
-      hosts: coHosts.length > 0 ? coHosts.map(coHost => coHost.name) : ["Host"], // Default to "Host" if no co-hosts
+      hosts: [currentUser?.id || "unknown", ...coHosts.map(coHost => coHost.name)], // Include current user ID and co-hosts
       status: isDraft ? "draft" as const : "upcoming" as const,
       locationTags,
       userTags,

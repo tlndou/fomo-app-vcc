@@ -6,7 +6,7 @@ export const partyService = {
   // Get all parties for a user
   async getParties(userId: string) {
     try {
-      console.log('Fetching parties from Supabase...')
+      console.log('Fetching parties from Supabase for user:', userId)
       const { data, error } = await supabase
         .from('parties')
         .select('*')
@@ -20,8 +20,16 @@ export const partyService = {
       
       console.log('Raw parties data from Supabase:', data)
       
+      // Filter parties where the user is a host
+      const userParties = (data || []).filter(party => {
+        const hosts = party.hosts || []
+        return hosts.some((host: string) => host === userId)
+      })
+      
+      console.log('Filtered parties for user:', userParties)
+      
       // Convert database fields to frontend format
-      const convertedParties = (data || []).map(party => ({
+      const convertedParties = userParties.map(party => ({
         ...party,
         locationTags: party.location_tags,
         userTags: party.user_tags,
@@ -42,6 +50,7 @@ export const partyService = {
   // Get all drafts for a user
   async getDrafts(userId: string) {
     try {
+      console.log('Fetching drafts from Supabase for user:', userId)
       const { data, error } = await supabase
         .from('parties')
         .select('*')
@@ -50,8 +59,18 @@ export const partyService = {
       
       if (error) throw error
       
+      console.log('Raw drafts data from Supabase:', data)
+      
+      // Filter drafts where the user is a host
+      const userDrafts = (data || []).filter(party => {
+        const hosts = party.hosts || []
+        return hosts.some((host: string) => host === userId)
+      })
+      
+      console.log('Filtered drafts for user:', userDrafts)
+      
       // Convert database fields to frontend format
-      return (data || []).map(party => ({
+      return userDrafts.map(party => ({
         ...party,
         locationTags: party.location_tags,
         userTags: party.user_tags,
