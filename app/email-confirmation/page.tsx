@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -20,42 +20,52 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle"
 import { useAuth } from "@/context/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import { Input } from "@/components/ui/input"
+import { validateEmail } from "@/lib/utils"
 
 export default function EmailConfirmationPage() {
+  const { resendEmailConfirmation, user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { resendEmailConfirmation } = useAuth()
   const { toast } = useToast()
-  const [isResending, setIsResending] = useState(false)
-  
-  // Get email from URL params or use a default
-  const email = searchParams.get("email") || "your email"
+  const [email, setEmail] = useState("")
+  const [status, setStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [cooldown, setCooldown] = useState(0)
+  const cooldownRef = useRef<NodeJS.Timeout | null>(null)
 
-  const handleResendEmail = async () => {
-    if (!email || email === "your email") {
-      toast({
-        title: "Email not found",
-        description: "Please try signing up again.",
-        variant: "destructive"
-      })
+  // Auto-populate email from user or URL param
+  useEffect(() => {
+    const urlEmail = searchParams.get("email")
+    if (user?.email) setEmail(user.email)
+    else if (urlEmail) setEmail(urlEmail)
+  }, [user, searchParams])
+
+  // Cooldown timer
+  useEffect(() => {
+    if (cooldown > 0) {
+      cooldownRef.current = setTimeout(() => setCooldown(cooldown - 1), 1000)
+    }
+    return () => { if (cooldownRef.current) clearTimeout(cooldownRef.current) }
+  }, [cooldown])
+
+  const handleResend = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setStatus(null)
+    if (!validateEmail(email)) {
+      setStatus({ type: 'error', message: 'Please enter a valid email address.' })
       return
     }
-
-    setIsResending(true)
-    try {
-      await resendEmailConfirmation(email)
-      toast({
-        title: "Email sent",
-        description: "Confirmation email has been resent to your inbox.",
-      })
-    } catch (error) {
-      toast({
-        title: "Failed to resend email",
-        description: "Please try again later.",
-        variant: "destructive"
-      })
-    } finally {
-      setIsResending(false)
+    setLoading(true)
+    const result = await resendEmailConfirmation(email)
+    setLoading(false)
+    setStatus({ type: result.success ? 'success' : 'error', message: result.message })
+    if (!result.success && result.message.includes('wait')) {
+      // Extract seconds from message
+      const match = result.message.match(/(\d+)s/)
+      if (match) setCooldown(Number(match[1]))
+    } else if (result.success) {
+      setCooldown(60)
     }
   }
 
@@ -148,15 +158,19 @@ export default function EmailConfirmationPage() {
 
             {/* Action Buttons */}
             <div className="space-y-3">
-              <Button 
-                onClick={handleResendEmail}
-                variant="outline" 
-                className="w-full"
-                disabled={isResending}
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isResending ? 'animate-spin' : ''}`} />
-                {isResending ? "Sending..." : "Resend confirmation email"}
-              </Button>
+              <form onSubmit={handleResend} className="space-y-4">
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                  disabled={!!user?.email}
+                />
+                <Button type="submit" className="w-full" disabled={loading || cooldown > 0}>
+                  {loading ? "Sending..." : cooldown > 0 ? `Resend available in ${cooldown}s` : "Resend Confirmation Email"}
+                </Button>
+              </form>
 
               <Button 
                 onClick={handleBackToLogin}
@@ -173,8 +187,8 @@ export default function EmailConfirmationPage() {
               <p className="text-sm text-muted-foreground">
                 Didn't receive the email?{" "}
                 <button 
-                  onClick={handleResendEmail}
-                  disabled={isResending}
+                  onClick={handleResend}
+                  disabled={loading || cooldown > 0}
                   className="text-foreground font-medium hover:underline disabled:opacity-50"
                 >
                   Try again
