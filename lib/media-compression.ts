@@ -184,18 +184,9 @@ async function compressVideo(
     // Write input file
     ffmpegInstance.writeFile(file.name, await fetchFile(file))
     
-    // Get video info
-    await ffmpegInstance.exec(['-i', file.name, '-f', 'null', '-'])
-    const info = await ffmpegInstance.exec(['-i', file.name])
-    
-    // Parse duration and dimensions from info
-    const durationMatch = info.match(/Duration: (\d{2}):(\d{2}):(\d{2})/)
-    const duration = durationMatch 
-      ? parseInt(durationMatch[1]) * 3600 + parseInt(durationMatch[2]) * 60 + parseInt(durationMatch[3])
-      : 0
-    
-    // Limit duration to 60 seconds
-    const maxDuration = Math.min(duration, VIDEO_SETTINGS.maxDuration)
+    // Get video info using a different approach
+    // We'll use a simpler approach without parsing duration for now
+    // The video will be limited by the -t parameter in the command
     
     // Compression command
     const outputFileName = `compressed_${file.name.replace(/\.[^/.]+$/, '.mp4')}`
@@ -210,7 +201,7 @@ async function compressVideo(
       '-c:a', 'aac',
       '-b:a', '128k',
       '-movflags', '+faststart',
-      '-t', maxDuration.toString(),
+      '-t', VIDEO_SETTINGS.maxDuration.toString(),
       '-y',
       outputFileName
     ]
