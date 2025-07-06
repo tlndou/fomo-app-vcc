@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
 import { supabase } from "@/lib/supabase"
 import { clearUserCache } from "@/lib/cached-api"
+import { validateEmail } from "@/lib/utils"
 
 interface User {
   id: string
@@ -23,6 +24,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string, username: string, starSign?: string, age?: number) => Promise<void>
   signOut: () => Promise<void>
   updateProfile: (updates: Partial<User>) => Promise<void>
+  resendEmailConfirmation: (email: string) => Promise<{ success: boolean; message: string }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -176,6 +178,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(prev => prev ? { ...prev, ...updates } : null)
   }
 
+  const resendEmailConfirmation = async (email: string): Promise<{ success: boolean; message: string }> => {
+    // Rate limit: 1-min cooldown per email
+    const cooldownKey = `fomo-resend-cooldown-${email}`
+    const lastSent = localStorage.getItem(cooldownKey)
+    const now = Date.now()
+    if (lastSent && now - parseInt(lastSent) < 60_000) {
+      const seconds = Math.ceil((60_000 - (now - parseInt(lastSent))) / 1000)
+      return { success: false, message: `Please wait ${seconds}s before resending confirmation email.` }
+    }
+    if (!validateEmail(email)) {
+      return { success: false, message: "Please enter a valid email address." }
+    }
+    try {
+      const { data, error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: {
+          emailRedirectTo: window.location.origin + '/auth/callback',
+        },
+      })
+      if (error) {
+        let msg = error.message || "Failed to resend confirmation email."
+        if (msg.includes('rate limit')) msg = "You are sending requests too quickly. Please wait a minute."
+        return { success: false, message: msg }
+      }
+      localStorage.setItem(cooldownKey, now.toString())
+      return { success: true, message: "Confirmation email sent! Please check your inbox and spam folder." }
+    } catch (err: any) {
+      return { success: false, message: "Network error. Please try again later." }
+    }
+  }
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -184,6 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signOut,
       updateProfile,
+      resendEmailConfirmation,
     }}>
       {children}
     </AuthContext.Provider>
