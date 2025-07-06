@@ -175,13 +175,23 @@ export async function getCachedUserFriends(userId: string): Promise<UserFriend[]
     }
 
     // Transform the data to match UserFriend interface
-    const friends: UserFriend[] = data?.map(item => ({
-      id: item.friend.id,
-      username: item.friend.username,
-      full_name: item.friend.full_name,
-      avatar_url: item.friend.avatar_url,
-      status: item.status
-    })) || []
+    const friends: UserFriend[] = data?.map(item => {
+      // Handle case where friend might be an array or null
+      const friend = Array.isArray(item.friend) ? item.friend[0] : item.friend
+      
+      if (!friend) {
+        console.warn('Friend data is missing for item:', item)
+        return null
+      }
+      
+      return {
+        id: friend.id,
+        username: friend.username,
+        full_name: friend.full_name,
+        avatar_url: friend.avatar_url,
+        status: item.status
+      }
+    }).filter(Boolean) as UserFriend[] || []
 
     // Cache the result
     globalCache.set(cacheKey, friends, CACHE_TTL.USER_FRIENDS)
