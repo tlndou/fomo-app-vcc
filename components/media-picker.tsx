@@ -5,7 +5,10 @@ import type React from "react"
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Camera, Upload, X, Play } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Camera, Upload, X, Play, Loader2, CheckCircle, XCircle } from "lucide-react"
+import { useMediaCompression } from "@/hooks/use-media-compression"
 
 interface MediaPickerProps {
   isOpen: boolean
@@ -17,9 +20,18 @@ interface MediaPickerProps {
 export function MediaPicker({ isOpen, onClose, onSelectMedia, selectedMedia }: MediaPickerProps) {
   const [isCapturing, setIsCapturing] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
+  const [compressedFiles, setCompressedFiles] = useState<File[]>([])
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const { compress, isCompressing, progress, result, error, reset } = useMediaCompression({
+    onComplete: (result) => {
+      if (result.files.length > 0) {
+        setCompressedFiles(result.files.map(f => f.file))
+      }
+    }
+  })
 
   const startCamera = async () => {
     try {
@@ -66,18 +78,22 @@ export function MediaPicker({ isOpen, onClose, onSelectMedia, selectedMedia }: M
     }
   }
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const result = e.target?.result as string
-        const mediaType = file.type.startsWith("video/") ? "video" : "image"
-        onSelectMedia(result, mediaType)
-        onClose()
-      }
-      reader.readAsDataURL(file)
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+    if (files.length > 0) {
+      await compress(files)
     }
+  }
+
+  const handleCompressedFileSelect = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const result = e.target?.result as string
+      const mediaType = file.type.startsWith("video/") ? "video" : "image"
+      onSelectMedia(result, mediaType)
+      onClose()
+    }
+    reader.readAsDataURL(file)
   }
 
   const handleRemoveMedia = () => {
@@ -86,6 +102,8 @@ export function MediaPicker({ isOpen, onClose, onSelectMedia, selectedMedia }: M
 
   const handleClose = () => {
     stopCamera()
+    reset()
+    setCompressedFiles([])
     onClose()
   }
 
@@ -125,6 +143,70 @@ export function MediaPicker({ isOpen, onClose, onSelectMedia, selectedMedia }: M
             </div>
           )}
 
+          {/* Compression Progress */}
+          {isCompressing && progress && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm font-medium">Compressing media...</span>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span>Overall Progress</span>
+                  <span>{Math.round(progress.overallProgress)}%</span>
+                </div>
+                <Progress value={progress.overallProgress} className="h-2" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span>Current: {progress.fileName}</span>
+                  <span>{Math.round(progress.progress)}%</span>
+                </div>
+                <Progress value={progress.progress} className="h-2" />
+                <p className="text-xs text-muted-foreground">{progress.step}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Compression Error */}
+          {error && (
+            <Alert variant="destructive">
+              <XCircle className="h-4 w-4" />
+              <AlertDescription>
+                Compression failed: {error.message}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Compressed Files Selection */}
+          {!isCompressing && compressedFiles.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm font-medium">Compressed files ready:</span>
+              </div>
+              <div className="space-y-2">
+                {compressedFiles.map((file, index) => (
+                  <Button
+                    key={index}
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => handleCompressedFileSelect(file)}
+                  >
+                    <div className="flex items-center gap-2">
+                      {file.type.startsWith("image/") ? (
+                        <Camera className="h-4 w-4" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                      <span className="truncate">{file.name}</span>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Camera capture interface */}
           {isCapturing ? (
             <div className="space-y-3">
@@ -159,6 +241,7 @@ export function MediaPicker({ isOpen, onClose, onSelectMedia, selectedMedia }: M
                 <Button
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={isCompressing}
                   className="flex flex-col items-center gap-2 h-20"
                 >
                   <Upload className="w-6 h-6" />
@@ -177,7 +260,7 @@ export function MediaPicker({ isOpen, onClose, onSelectMedia, selectedMedia }: M
 
               {/* Info text */}
               <div className="text-xs text-gray-500 text-center">
-                You can upload photos and videos from your camera roll or take a new photo
+                Photos and videos will be automatically compressed for optimal performance
               </div>
             </div>
           )}
