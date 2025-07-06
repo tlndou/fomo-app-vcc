@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
 import { supabase } from "@/lib/supabase"
+import { clearUserCache } from "@/lib/cached-api"
 
 interface User {
   id: string
@@ -155,6 +156,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
+    // Clear user cache before signing out
+    if (user) {
+      clearUserCache(user.id)
+    }
+    
     const { error } = await supabase.auth.signOut()
     if (error) throw error
   }
