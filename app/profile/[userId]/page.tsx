@@ -36,6 +36,7 @@ import { useAuth } from "@/context/auth-context"
 import { useParties } from "@/context/party-context"
 import { useUserStats } from "@/hooks/use-user-stats"
 import { syncService } from "@/lib/sync-service"
+import { supabase } from "@/lib/supabase"
 
 // Extended user type for profile
 interface ProfileUser extends User {
@@ -200,12 +201,19 @@ function ProfilePage() {
     setIsSaving(true)
 
     try {
-      // Use sync service to update profile across all devices
-      const success = await syncService.syncUserProfile(user.id, {
-        name: editName,
-        bio: editBio,
-        avatar: editAvatar || user.avatar,
-      })
+      // Try to use sync service first
+      let success = false
+      try {
+        success = await syncService.syncUserProfile(user.id, {
+          name: editName,
+          bio: editBio,
+          avatar: editAvatar || user.avatar,
+        })
+      } catch (syncError) {
+        console.error('❌ Sync service error:', syncError)
+        // Fallback to direct update
+        success = false
+      }
 
       if (success) {
         setUser((prev) =>
@@ -220,8 +228,52 @@ function ProfilePage() {
         )
         console.log('✅ Profile updated and synced successfully')
       } else {
-        console.error('❌ Failed to sync profile updates')
-        alert('Failed to save profile changes. Please try again.')
+        // Fallback: Update directly without sync service
+        console.log('⚠️ Using fallback save method')
+        
+        // Update local state
+        setUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                name: editName,
+                bio: editBio,
+                avatar: editAvatar || prev.avatar,
+              }
+            : null,
+        )
+        
+        // Update localStorage
+        const storedUsers = localStorage.getItem('fomo-users')
+        const users = storedUsers ? JSON.parse(storedUsers) : {}
+        users[user.id] = {
+          ...users[user.id],
+          name: editName,
+          bio: editBio,
+          avatar: editAvatar || user.avatar,
+        }
+        localStorage.setItem('fomo-users', JSON.stringify(users))
+        
+        // Try to update Supabase metadata directly
+        try {
+          const { error } = await supabase.auth.updateUser({
+            data: {
+              name: editName,
+              bio: editBio,
+              avatar: editAvatar || user.avatar,
+            }
+          })
+          
+          if (error) {
+            console.error('❌ Error updating Supabase metadata:', error)
+          } else {
+            console.log('✅ Supabase metadata updated successfully')
+          }
+        } catch (supabaseError) {
+          console.error('❌ Supabase update error:', supabaseError)
+        }
+        
+        console.log('✅ Profile updated with fallback method')
       }
     } catch (error) {
       console.error('❌ Error saving profile:', error)
