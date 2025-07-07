@@ -99,11 +99,6 @@ export const partyService = {
         description: party.description,
         hosts: party.hosts || [],
         status: party.status || 'draft',
-        location_tags: party.locationTags || [],
-        user_tags: party.userTags || [],
-        invites: party.invites || [],
-        co_hosts: party.coHosts || [],
-        require_approval: party.requireApproval || false,
         created_at: now,
         updated_at: now,
       }
@@ -126,10 +121,11 @@ export const partyService = {
       const convertedParty = {
         ...data[0],
         attendees: data[0].attendees || 0,
-        locationTags: data[0].location_tags,
-        userTags: data[0].user_tags,
-        coHosts: data[0].co_hosts,
-        requireApproval: data[0].require_approval,
+        locationTags: data[0].location_tags || [],
+        userTags: data[0].user_tags || [],
+        coHosts: data[0].co_hosts || [],
+        requireApproval: data[0].require_approval || false,
+        invites: data[0].invites || [],
         createdAt: data[0].created_at,
         updatedAt: data[0].updated_at
       }
@@ -258,11 +254,6 @@ export const partyService = {
         description: party.description,
         hosts: party.hosts || [],
         status: party.status || 'draft',
-        location_tags: party.locationTags || [],
-        user_tags: party.userTags || [],
-        invites: party.invites || [],
-        co_hosts: party.coHosts || [],
-        require_approval: party.requireApproval || false,
         created_at: party.createdAt || new Date().toISOString(),
         updated_at: party.updatedAt || new Date().toISOString()
       }))
