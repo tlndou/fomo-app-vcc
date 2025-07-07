@@ -97,7 +97,6 @@ export const partyService = {
         time: party.time,
         location: party.location,
         description: party.description,
-        attendees: party.attendees || 0,
         hosts: party.hosts || [],
         status: party.status || 'draft',
         location_tags: party.locationTags || [],
@@ -126,6 +125,7 @@ export const partyService = {
       // Convert back to camelCase for frontend
       const convertedParty = {
         ...data[0],
+        attendees: data[0].attendees || 0,
         locationTags: data[0].location_tags,
         userTags: data[0].user_tags,
         coHosts: data[0].co_hosts,
@@ -256,7 +256,6 @@ export const partyService = {
         time: party.time,
         location: party.location,
         description: party.description,
-        attendees: party.attendees || 0,
         hosts: party.hosts || [],
         status: party.status || 'draft',
         location_tags: party.locationTags || [],
