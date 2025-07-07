@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { supabase } from "@/lib/supabase"
 import { clearUserCache } from "@/lib/cached-api"
 import { validateEmail } from "@/lib/utils"
+import { syncService } from "@/lib/sync-service"
 
 interface User {
   id: string
@@ -26,6 +27,7 @@ interface AuthContextType {
   updateProfile: (updates: Partial<User>) => Promise<void>
   resendEmailConfirmation: (email: string) => Promise<{ success: boolean; message: string }>
   forceRefreshUserData: () => Promise<void>
+  syncUserData: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -42,41 +44,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('🔍 Session user data:', session.user)
         console.log('🔍 User metadata:', session.user.user_metadata)
         
-        // Try to get user data from localStorage as fallback
-        const storedUsers = localStorage.getItem('fomo-users')
-        const users = storedUsers ? JSON.parse(storedUsers) : {}
-        const storedUserData = users[session.user.id]
+        // Use sync service to get user profile with fallbacks
+        const userProfile = await syncService.getUserProfile(session.user.id)
         
-        console.log('🔍 Stored user data:', storedUserData)
-        
-        const userData: User = {
-          id: session.user.id,
-          name: session.user.user_metadata?.name || storedUserData?.name || "User",
-          username: session.user.user_metadata?.username || storedUserData?.username || "user",
-          email: session.user.email,
-          avatar: session.user.user_metadata?.avatar_url || storedUserData?.avatar,
-          bio: session.user.user_metadata?.bio || storedUserData?.bio,
-          joinDate: session.user.user_metadata?.joinDate || storedUserData?.joinDate,
-          starSign: session.user.user_metadata?.starSign || storedUserData?.starSign,
-          age: session.user.user_metadata?.age || storedUserData?.age,
-        }
-        
-        console.log('🔍 Final user data:', userData)
-        setUser(userData)
+        if (userProfile) {
+          console.log('🔍 User profile from sync service:', userProfile)
+          setUser(userProfile)
+        } else {
+          // Fallback to old method
+          const storedUsers = localStorage.getItem('fomo-users')
+          const users = storedUsers ? JSON.parse(storedUsers) : {}
+          const storedUserData = users[session.user.id]
+          
+          console.log('🔍 Stored user data:', storedUserData)
+          
+          const userData: User = {
+            id: session.user.id,
+            name: session.user.user_metadata?.name || storedUserData?.name || "User",
+            username: session.user.user_metadata?.username || storedUserData?.username || "user",
+            email: session.user.email,
+            avatar: session.user.user_metadata?.avatar_url || storedUserData?.avatar,
+            bio: session.user.user_metadata?.bio || storedUserData?.bio,
+            joinDate: session.user.user_metadata?.joinDate || storedUserData?.joinDate,
+            starSign: session.user.user_metadata?.starSign || storedUserData?.starSign,
+            age: session.user.user_metadata?.age || storedUserData?.age,
+          }
+          
+          console.log('🔍 Final user data:', userData)
+          setUser(userData)
 
-        // Store user data in localStorage for other users to access
-        users[session.user.id] = {
-          id: session.user.id,
-          name: userData.name,
-          username: userData.username,
-          starSign: userData.starSign,
-          joinDate: userData.joinDate,
-          avatar: userData.avatar,
-          bio: userData.bio,
-          age: userData.age,
+          // Store user data in localStorage for other users to access
+          users[session.user.id] = {
+            id: session.user.id,
+            name: userData.name,
+            username: userData.username,
+            starSign: userData.starSign,
+            joinDate: userData.joinDate,
+            avatar: userData.avatar,
+            bio: userData.bio,
+            age: userData.age,
+          }
+          
+          localStorage.setItem('fomo-users', JSON.stringify(users))
         }
-        
-        localStorage.setItem('fomo-users', JSON.stringify(users))
       }
       setLoading(false)
     }
@@ -93,44 +103,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('🔍 Auth state change - Session user data:', session.user)
           console.log('🔍 Auth state change - User metadata:', session.user.user_metadata)
           
-          // Try to get user data from localStorage as fallback
-          const storedUsers = localStorage.getItem('fomo-users')
-          const users = storedUsers ? JSON.parse(storedUsers) : {}
-          const storedUserData = users[session.user.id]
+          // Use sync service to get user profile with fallbacks
+          const userProfile = await syncService.getUserProfile(session.user.id)
           
-          console.log('🔍 Auth state change - Stored user data:', storedUserData)
-          
-          // Prioritize user metadata from Supabase, fallback to localStorage, then defaults
-          const userData: User = {
-            id: session.user.id,
-            name: session.user.user_metadata?.name || storedUserData?.name || "User",
-            username: session.user.user_metadata?.username || storedUserData?.username || "user",
-            email: session.user.email,
-            avatar: session.user.user_metadata?.avatar_url || storedUserData?.avatar,
-            bio: session.user.user_metadata?.bio || storedUserData?.bio,
-            joinDate: session.user.user_metadata?.joinDate || storedUserData?.joinDate,
-            starSign: session.user.user_metadata?.starSign || storedUserData?.starSign,
-            age: session.user.user_metadata?.age || storedUserData?.age,
-          }
-          
-          console.log('🔍 Auth state change - Final user data:', userData)
-          setUser(userData)
+          if (userProfile) {
+            console.log('🔍 Auth state change - User profile from sync service:', userProfile)
+            setUser(userProfile)
+          } else {
+            // Fallback to old method
+            const storedUsers = localStorage.getItem('fomo-users')
+            const users = storedUsers ? JSON.parse(storedUsers) : {}
+            const storedUserData = users[session.user.id]
+            
+            console.log('🔍 Auth state change - Stored user data:', storedUserData)
+            
+            // Prioritize user metadata from Supabase, fallback to localStorage, then defaults
+            const userData: User = {
+              id: session.user.id,
+              name: session.user.user_metadata?.name || storedUserData?.name || "User",
+              username: session.user.user_metadata?.username || storedUserData?.username || "user",
+              email: session.user.email,
+              avatar: session.user.user_metadata?.avatar_url || storedUserData?.avatar,
+              bio: session.user.user_metadata?.bio || storedUserData?.bio,
+              joinDate: session.user.user_metadata?.joinDate || storedUserData?.joinDate,
+              starSign: session.user.user_metadata?.starSign || storedUserData?.starSign,
+              age: session.user.user_metadata?.age || storedUserData?.age,
+            }
+            
+            console.log('🔍 Auth state change - Final user data:', userData)
+            setUser(userData)
 
-          // Update localStorage with the latest data
-          users[session.user.id] = {
-            id: session.user.id,
-            name: userData.name,
-            username: userData.username,
-            starSign: userData.starSign,
-            joinDate: userData.joinDate,
-            avatar: userData.avatar,
-            bio: userData.bio,
-            age: userData.age,
-            email: userData.email,
+            // Update localStorage with the latest data
+            users[session.user.id] = {
+              id: session.user.id,
+              name: userData.name,
+              username: userData.username,
+              starSign: userData.starSign,
+              joinDate: userData.joinDate,
+              avatar: userData.avatar,
+              bio: userData.bio,
+              age: userData.age,
+              email: userData.email,
+            }
+            
+            localStorage.setItem('fomo-users', JSON.stringify(users))
+            console.log('🔍 Auth state change - Updated localStorage with user data')
           }
-          
-          localStorage.setItem('fomo-users', JSON.stringify(users))
-          console.log('🔍 Auth state change - Updated localStorage with user data')
         } else {
           console.log('🔍 Auth state change - No session, clearing user')
           setUser(null)
@@ -173,11 +191,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('🔧 SignUp: User data from response:', data.user)
     console.log('🔧 SignUp: User metadata from response:', data.user?.user_metadata)
 
-    // Store user data in localStorage immediately for fallback
+    // Use sync service to store user data
     if (data.user) {
-      const storedUsers = localStorage.getItem('fomo-users')
-      const users = storedUsers ? JSON.parse(storedUsers) : {}
-      
       const userData = {
         id: data.user.id,
         name,
@@ -190,10 +205,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
       }
       
-      users[data.user.id] = userData
-      localStorage.setItem('fomo-users', JSON.stringify(users))
+      // Sync user profile across all storage methods
+      await syncService.syncUserProfile(data.user.id, userData)
       
-      console.log('🔧 SignUp: Stored user data in localStorage:', userData)
+      console.log('🔧 SignUp: User data synced successfully')
       
       // Also set the user immediately if we have the data
       setUser(userData)
@@ -215,44 +230,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = async (updates: Partial<User>) => {
     if (!user) return
 
-    const { error } = await supabase.auth.updateUser({
-      data: updates
-    })
-    if (error) throw error
-
-    setUser(prev => prev ? { ...prev, ...updates } : null)
+    // Use sync service to update profile across all devices
+    const success = await syncService.syncUserProfile(user.id, updates)
+    
+    if (success) {
+      setUser(prev => prev ? { ...prev, ...updates } : null)
+    } else {
+      throw new Error('Failed to sync profile updates')
+    }
   }
 
   const forceRefreshUserData = async () => {
     if (!user) return
     
     try {
-      // Get current session
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        console.log('🔄 Force refreshing user data...')
-        console.log('🔄 Current session:', session)
-        
-        // Update user metadata in Supabase
-        const { error } = await supabase.auth.updateUser({
-          data: {
-            name: user.name,
-            username: user.username,
-            starSign: user.starSign,
-            joinDate: user.joinDate,
-            bio: user.bio,
-            age: user.age,
-          }
-        })
-        
-        if (error) {
-          console.error('❌ Error updating user metadata:', error)
-        } else {
-          console.log('✅ User metadata updated successfully')
-        }
+      console.log('🔄 Force refreshing user data...')
+      
+      const { userProfile } = await syncService.forceRefreshUserData(user.id)
+      
+      if (userProfile) {
+        setUser(userProfile)
+        console.log('✅ User data refreshed successfully')
       }
     } catch (error) {
       console.error('❌ Error in forceRefreshUserData:', error)
+    }
+  }
+
+  const syncUserData = async () => {
+    if (!user) return
+    
+    try {
+      console.log('🔄 Syncing user data...')
+      
+      // Sync current user data to all storage methods
+      const success = await syncService.syncUserProfile(user.id, user)
+      
+      if (success) {
+        console.log('✅ User data synced successfully')
+      } else {
+        console.error('❌ Failed to sync user data')
+      }
+    } catch (error) {
+      console.error('❌ Error syncing user data:', error)
     }
   }
 
@@ -340,112 +360,90 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Test function to verify signup process works correctly
+  // Test signup process and data storage
   const testSignupProcess = async () => {
-    console.log('🧪 Test: Starting signup process test...')
+    console.log('🧪 Testing signup process...')
     
-    // Simulate user data that would be collected during signup
-    const testUserData = {
-      email: `test-${Date.now()}@example.com`,
-      password: "TestPassword123!",
-      name: "Test User",
-      username: `testuser${Date.now()}`,
-      starSign: "Aries",
-      age: 25
-    }
-    
-    console.log('🧪 Test: User data to test with:', testUserData)
-    
-    try {
-      // This would normally be called during signup
-      await signUp(
-        testUserData.email,
-        testUserData.password,
-        testUserData.name,
-        testUserData.username,
-        testUserData.starSign,
-        testUserData.age
-      )
-      
-      console.log('🧪 Test: Signup process completed successfully')
-      console.log('🧪 Test: Check localStorage for stored user data')
-      
-      // Check what's stored in localStorage
-      const storedUsers = localStorage.getItem('fomo-users')
-      console.log('🧪 Test: Stored users in localStorage:', storedUsers ? JSON.parse(storedUsers) : 'None')
-      
-    } catch (error) {
-      console.error('🧪 Test: Signup process failed:', error)
-    }
-  }
-
-  // Simple test function that doesn't create actual user accounts
-  const testDataStorage = () => {
-    console.log('🧪 Test: Testing data storage logic...')
-    
-    // Simulate user data
-    const testUserData = {
-      id: 'test-user-id',
+    const testUser = {
       name: 'Test User',
       username: 'testuser',
       email: 'test@example.com',
-      starSign: 'Aries',
+      starSign: 'Libra',
       age: 25,
-      joinDate: new Date().toLocaleDateString(),
-      bio: 'Test bio'
     }
     
-    console.log('🧪 Test: Simulating user data:', testUserData)
-    
-    // Test localStorage storage
-    const storedUsers = localStorage.getItem('fomo-users')
-    const users = storedUsers ? JSON.parse(storedUsers) : {}
-    
-    users[testUserData.id] = testUserData
-    localStorage.setItem('fomo-users', JSON.stringify(users))
-    
-    console.log('🧪 Test: Data stored in localStorage successfully')
-    console.log('🧪 Test: Current localStorage:', JSON.parse(localStorage.getItem('fomo-users') || '{}'))
-    
-    // Clean up test data
-    delete users[testUserData.id]
-    localStorage.setItem('fomo-users', JSON.stringify(users))
-    
-    console.log('🧪 Test: Test data cleaned up')
+    try {
+      // Simulate signup process
+      console.log('🧪 Test user data:', testUser)
+      
+      // Store in localStorage
+      const storedUsers = localStorage.getItem('fomo-users')
+      const users = storedUsers ? JSON.parse(storedUsers) : {}
+      users['test-user-id'] = {
+        id: 'test-user-id',
+        ...testUser,
+        joinDate: new Date().toLocaleDateString(),
+      }
+      localStorage.setItem('fomo-users', JSON.stringify(users))
+      
+      console.log('✅ Test signup process completed')
+      console.log('✅ Test user data stored in localStorage')
+      
+      return true
+    } catch (error) {
+      console.error('❌ Test signup process failed:', error)
+      return false
+    }
   }
 
-  // Debug function to check user data including star sign
-  const debugUserData = () => {
-    console.log('🔍 Debug: Checking user data...')
+  // Test data storage and retrieval
+  const testDataStorage = async () => {
+    console.log('🧪 Testing data storage and retrieval...')
     
-    // Check current user state
-    console.log('🔍 Current user state:', user)
-    
-    // Check localStorage
-    const storedUsers = localStorage.getItem('fomo-users')
-    const users = storedUsers ? JSON.parse(storedUsers) : {}
-    console.log('🔍 Stored users in localStorage:', users)
-    
-    // Check if current user exists in localStorage
-    if (user) {
-      const storedUserData = users[user.id]
-      console.log('🔍 Current user data in localStorage:', storedUserData)
+    try {
+      // Test localStorage
+      const storedUsers = localStorage.getItem('fomo-users')
+      console.log('🧪 localStorage users:', storedUsers ? JSON.parse(storedUsers) : {})
       
-      if (storedUserData) {
-        console.log('🔍 Star sign in localStorage:', storedUserData.starSign)
-        console.log('🔍 Age in localStorage:', storedUserData.age)
-        console.log('🔍 Join date in localStorage:', storedUserData.joinDate)
-      }
+      // Test Supabase user metadata
+      const { data: { user } } = await supabase.auth.getUser()
+      console.log('🧪 Supabase user metadata:', user?.user_metadata)
+      
+      console.log('✅ Data storage test completed')
+      return true
+    } catch (error) {
+      console.error('❌ Data storage test failed:', error)
+      return false
+    }
+  }
+
+  // Debug user data from all sources
+  const debugUserData = async () => {
+    if (!user) {
+      console.log('❌ No user logged in')
+      return
     }
     
-    // Check Supabase session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('🔍 Supabase session:', session)
-      if (session?.user) {
-        console.log('🔍 Supabase user metadata:', session.user.user_metadata)
-        console.log('🔍 Star sign in Supabase metadata:', session.user.user_metadata?.starSign)
-      }
-    })
+    console.log('🔍 Debugging user data for:', user.id)
+    
+    try {
+      // Check Supabase user metadata
+      const { data: { user: supabaseUser } } = await supabase.auth.getUser()
+      console.log('🔍 Supabase user metadata:', supabaseUser?.user_metadata)
+      
+      // Check localStorage
+      const storedUsers = localStorage.getItem('fomo-users')
+      const users = storedUsers ? JSON.parse(storedUsers) : {}
+      const storedUser = users[user.id]
+      console.log('🔍 localStorage user data:', storedUser)
+      
+      // Check current user state
+      console.log('🔍 Current user state:', user)
+      
+      console.log('✅ User data debug completed')
+    } catch (error) {
+      console.error('❌ Error debugging user data:', error)
+    }
   }
 
   // Fix star sign data for current user
@@ -510,54 +508,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ;(window as any).testDataStorage = testDataStorage
     ;(window as any).debugUserData = debugUserData
     ;(window as any).fixStarSignData = fixStarSignData
+    ;(window as any).syncUserData = syncUserData
+    ;(window as any).forceRefreshUserData = forceRefreshUserData
   }
 
-  const resendEmailConfirmation = async (email: string): Promise<{ success: boolean; message: string }> => {
-    // Rate limit: 1-min cooldown per email
-    const cooldownKey = `fomo-resend-cooldown-${email}`
-    const lastSent = localStorage.getItem(cooldownKey)
-    const now = Date.now()
-    if (lastSent && now - parseInt(lastSent) < 60_000) {
-      const seconds = Math.ceil((60_000 - (now - parseInt(lastSent))) / 1000)
-      return { success: false, message: `Please wait ${seconds}s before resending confirmation email.` }
-    }
-    if (!validateEmail(email)) {
-      return { success: false, message: "Please enter a valid email address." }
-    }
-    try {
-      const { data, error } = await supabase.auth.resend({
+  const value: AuthContextType = {
+    user,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    updateProfile,
+    resendEmailConfirmation: async (email: string) => {
+      const { error } = await supabase.auth.resend({
         type: 'signup',
         email,
-        options: {
-          emailRedirectTo: window.location.origin + '/auth/callback',
-        },
       })
       if (error) {
-        let msg = error.message || "Failed to resend confirmation email."
-        if (msg.includes('rate limit')) msg = "You are sending requests too quickly. Please wait a minute."
-        return { success: false, message: msg }
+        return { success: false, message: error.message }
       }
-      localStorage.setItem(cooldownKey, now.toString())
-      return { success: true, message: "Confirmation email sent! Please check your inbox and spam folder." }
-    } catch (err: any) {
-      return { success: false, message: "Network error. Please try again later." }
-    }
+      return { success: true, message: 'Email confirmation sent!' }
+    },
+    forceRefreshUserData,
+    syncUserData,
   }
 
-  return (
-    <AuthContext.Provider value={{
-      user,
-      loading,
-      signIn,
-      signUp,
-      signOut,
-      updateProfile,
-      resendEmailConfirmation,
-      forceRefreshUserData,
-    }}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

@@ -35,6 +35,7 @@ import { ProtectedRoute } from "@/components/protected-route"
 import { useAuth } from "@/context/auth-context"
 import { useParties } from "@/context/party-context"
 import { useUserStats } from "@/hooks/use-user-stats"
+import { syncService } from "@/lib/sync-service"
 
 // Extended user type for profile
 interface ProfileUser extends User {
@@ -198,34 +199,33 @@ function ProfilePage() {
   const handleSaveProfile = async () => {
     setIsSaving(true)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    try {
+      // Use sync service to update profile across all devices
+      const success = await syncService.syncUserProfile(user.id, {
+        name: editName,
+        bio: editBio,
+        avatar: editAvatar || user.avatar,
+      })
 
-    setUser((prev) =>
-      prev
-        ? {
-            ...prev,
-            name: editName,
-            bio: editBio,
-            avatar: editAvatar || prev.avatar,
-          }
-        : null,
-    )
-
-    // Update stored user data in localStorage
-    if (authUser) {
-      const storedUsers = localStorage.getItem('fomo-users')
-      const users = storedUsers ? JSON.parse(storedUsers) : {}
-      
-      if (users[authUser.id]) {
-        users[authUser.id] = {
-          ...users[authUser.id],
-          name: editName,
-          bio: editBio,
-          avatar: editAvatar || users[authUser.id].avatar,
-        }
-        localStorage.setItem('fomo-users', JSON.stringify(users))
+      if (success) {
+        setUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                name: editName,
+                bio: editBio,
+                avatar: editAvatar || prev.avatar,
+              }
+            : null,
+        )
+        console.log('✅ Profile updated and synced successfully')
+      } else {
+        console.error('❌ Failed to sync profile updates')
+        alert('Failed to save profile changes. Please try again.')
       }
+    } catch (error) {
+      console.error('❌ Error saving profile:', error)
+      alert('Error saving profile changes. Please try again.')
     }
 
     setIsSaving(false)

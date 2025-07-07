@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { Party, Invite, CoHost, LocationTag, UserTag } from '@/types/party'
+import { syncService } from './sync-service'
 
 // Party management service
 export const partyService = {
@@ -7,6 +8,13 @@ export const partyService = {
   async getParties(userId: string) {
     try {
       console.log('Fetching parties from Supabase for user:', userId)
+      
+      // Use sync service to get user profile for proper filtering
+      const userProfile = await syncService.getUserProfile(userId)
+      const userName = userProfile?.name || userId
+      
+      console.log('🔍 Filtering parties by user name:', userName)
+      
       const { data, error } = await supabase
         .from('parties')
         .select('*')
@@ -19,12 +27,6 @@ export const partyService = {
       }
       
       console.log('Raw parties data from Supabase:', data)
-      
-      // Get user name from localStorage to filter parties
-      const storedUsers = localStorage.getItem('fomo-users')
-      const users = storedUsers ? JSON.parse(storedUsers) : {}
-      const currentUser = users[userId]
-      const userName = currentUser?.name || userId
       
       // Filter parties where the user is a host (by name)
       const userParties = (data || []).filter(party => {
