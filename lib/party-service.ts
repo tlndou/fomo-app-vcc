@@ -121,6 +121,7 @@ export const partyService = {
       const convertedParty = {
         ...data[0],
         attendees: data[0].attendees || 0,
+        hosts: data[0].hosts || ["unknown"],
         locationTags: data[0].location_tags || [],
         userTags: data[0].user_tags || [],
         coHosts: data[0].co_hosts || [],
