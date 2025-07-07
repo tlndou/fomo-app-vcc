@@ -33,7 +33,11 @@ const tagColors = [
 
 // Generate unique party ID and invite link
 const generatePartyId = () => {
-  return `party_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
 }
 
 function CreatePartyPage() {
@@ -216,7 +220,7 @@ function CreatePartyPage() {
       location: location,
       description: description,
       attendees: invites.filter(invite => invite.status === 'approved').length + 1, // +1 for creator
-      hosts: [user?.id || "unknown", ...coHosts.map(coHost => coHost.name)], // Include current user ID and co-hosts
+      hosts: [user?.name || "unknown", ...coHosts.map(coHost => coHost.name)], // Include current user name and co-hosts
       status: isDraft ? "draft" as const : "upcoming" as const,
       locationTags,
       userTags,

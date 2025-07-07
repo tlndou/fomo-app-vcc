@@ -20,10 +20,16 @@ export const partyService = {
       
       console.log('Raw parties data from Supabase:', data)
       
-      // Filter parties where the user is a host
+      // Get user name from localStorage to filter parties
+      const storedUsers = localStorage.getItem('fomo-users')
+      const users = storedUsers ? JSON.parse(storedUsers) : {}
+      const currentUser = users[userId]
+      const userName = currentUser?.name || userId
+      
+      // Filter parties where the user is a host (by name)
       const userParties = (data || []).filter(party => {
         const hosts = party.hosts || []
-        return hosts.some((host: string) => host === userId)
+        return hosts.some((host: string) => host === userName)
       })
       
       console.log('Filtered parties for user:', userParties)
@@ -61,10 +67,16 @@ export const partyService = {
       
       console.log('Raw drafts data from Supabase:', data)
       
-      // Filter drafts where the user is a host
+      // Get user name from localStorage to filter drafts
+      const storedUsers = localStorage.getItem('fomo-users')
+      const users = storedUsers ? JSON.parse(storedUsers) : {}
+      const currentUser = users[userId]
+      const userName = currentUser?.name || userId
+      
+      // Filter drafts where the user is a host (by name)
       const userDrafts = (data || []).filter(party => {
         const hosts = party.hosts || []
-        return hosts.some((host: string) => host === userId)
+        return hosts.some((host: string) => host === userName)
       })
       
       console.log('Filtered drafts for user:', userDrafts)
@@ -90,8 +102,18 @@ export const partyService = {
     try {
       console.log('Creating party with data:', party)
       const now = new Date().toISOString()
+      
+      // Generate a proper UUID
+      const generateUUID = () => {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0
+          const v = c === 'x' ? r : (r & 0x3 | 0x8)
+          return v.toString(16)
+        })
+      }
+      
       const partyWithTimestamp = {
-        id: `party_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: generateUUID(),
         name: party.name,
         date: party.date,
         time: party.time,
