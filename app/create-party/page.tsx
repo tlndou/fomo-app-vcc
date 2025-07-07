@@ -229,6 +229,10 @@ function CreatePartyPage() {
       requireApproval,
     }
 
+    console.log('🔧 Creating party with data:', partyData)
+    console.log('🔧 Current user:', user)
+    console.log('🔧 User name being used as host:', user?.name || "unknown")
+
     if (isEditing) {
       if (isDraft) {
         updateDraft(draftId, partyData)

@@ -7,13 +7,14 @@ export const partyService = {
   // Get all parties for a user
   async getParties(userId: string) {
     try {
-      console.log('Fetching parties from Supabase for user:', userId)
+      console.log('🔍 Fetching parties from Supabase for user:', userId)
       
       // Use sync service to get user profile for proper filtering
       const userProfile = await syncService.getUserProfile(userId)
       const userName = userProfile?.name || userId
       
-      console.log('🔍 Filtering parties by user name:', userName)
+      console.log('🔍 User profile from sync service:', userProfile)
+      console.log('🔍 Using user name for filtering:', userName)
       
       const { data, error } = await supabase
         .from('parties')
@@ -22,19 +23,22 @@ export const partyService = {
         .order('created_at', { ascending: false })
       
       if (error) {
-        console.error('Supabase error:', error)
+        console.error('❌ Supabase error:', error)
         throw error
       }
       
-      console.log('Raw parties data from Supabase:', data)
+      console.log('🔍 Raw parties data from Supabase:', data)
       
       // Filter parties where the user is a host (by name)
       const userParties = (data || []).filter(party => {
         const hosts = party.hosts || []
-        return hosts.some((host: string) => host === userName)
+        console.log(`🔍 Checking party "${party.name}" with hosts:`, hosts)
+        const isHost = hosts.some((host: string) => host === userName)
+        console.log(`🔍 Is user "${userName}" a host? ${isHost}`)
+        return isHost
       })
       
-      console.log('Filtered parties for user:', userParties)
+      console.log('✅ Filtered parties for user:', userParties)
       
       // Convert database fields to frontend format
       const convertedParties = userParties.map(party => ({
@@ -47,10 +51,10 @@ export const partyService = {
         updatedAt: party.updated_at
       }))
       
-      console.log('Converted parties:', convertedParties)
+      console.log('✅ Converted parties:', convertedParties)
       return convertedParties
     } catch (error) {
-      console.error('Error fetching parties:', error)
+      console.error('❌ Error fetching parties:', error)
       return []
     }
   },
