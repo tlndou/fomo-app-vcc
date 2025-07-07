@@ -37,6 +37,8 @@ import { useParties } from "@/context/party-context"
 import { useUserStats } from "@/hooks/use-user-stats"
 import { syncService } from "@/lib/sync-service"
 import { supabase } from "@/lib/supabase"
+import { LoadingButton } from "@/components/ui/loading-button"
+import { useLoadingStates, loadingUtils, toastUtils } from "@/lib/loading-states"
 
 // Extended user type for profile
 interface ProfileUser extends User {
@@ -61,15 +63,16 @@ function ProfilePage() {
   const router = useRouter()
   const params = useParams()
   const userId = params.userId as string
-  const { user: authUser } = useAuth()
+  const { user: authUser, optimisticUpdateProfile, isUpdatingProfile } = useAuth()
   const { parties } = useParties()
   const { stats, incrementFriendCount, decrementFriendCount } = useUserStats(userId)
+  const { profileSave, setLoadingState } = useLoadingStates()
 
   const [user, setUser] = useState<ProfileUser | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false)
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   // Edit form state
   const [editName, setEditName] = useState("")
@@ -198,40 +201,19 @@ function ProfilePage() {
   }
 
   const handleSaveProfile = async () => {
-    setIsSaving(true)
+    if (!user) return
 
-    try {
-      // Try to use sync service first
-      let success = false
-      try {
-        success = await syncService.syncUserProfile(user.id, {
+    // Use optimistic update with loading state management
+    await loadingUtils.optimisticUpdate(
+      // Immediate update
+      () => {
+        optimisticUpdateProfile({
           name: editName,
           bio: editBio,
           avatar: editAvatar || user.avatar,
         })
-      } catch (syncError) {
-        console.error('❌ Sync service error:', syncError)
-        // Fallback to direct update
-        success = false
-      }
-
-      if (success) {
-        setUser((prev) =>
-          prev
-            ? {
-                ...prev,
-                name: editName,
-                bio: editBio,
-                avatar: editAvatar || prev.avatar,
-              }
-            : null,
-        )
-        console.log('✅ Profile updated and synced successfully')
-      } else {
-        // Fallback: Update directly without sync service
-        console.log('⚠️ Using fallback save method')
         
-        // Update local state
+        // Update local state immediately
         setUser((prev) =>
           prev
             ? {
@@ -243,45 +225,26 @@ function ProfilePage() {
             : null,
         )
         
-        // Update localStorage
-        const storedUsers = localStorage.getItem('fomo-users')
-        const users = storedUsers ? JSON.parse(storedUsers) : {}
-        users[user.id] = {
-          ...users[user.id],
-          name: editName,
-          bio: editBio,
-          avatar: editAvatar || user.avatar,
-        }
-        localStorage.setItem('fomo-users', JSON.stringify(users))
-        
-        // Try to update Supabase metadata directly
-        try {
-          const { error } = await supabase.auth.updateUser({
-            data: {
-              name: editName,
-              bio: editBio,
-              avatar: editAvatar || user.avatar,
-            }
-          })
-          
-          if (error) {
-            console.error('❌ Error updating Supabase metadata:', error)
-          } else {
-            console.log('✅ Supabase metadata updated successfully')
-          }
-        } catch (supabaseError) {
-          console.error('❌ Supabase update error:', supabaseError)
-        }
-        
-        console.log('✅ Profile updated with fallback method')
+        toastUtils.success('Profile updated successfully!')
+      },
+      // API call
+      async () => {
+        // The optimistic update already handles the sync
+        return Promise.resolve()
+      },
+      // Loading state setter
+      setLoadingState.bind(null, 'profileSave'),
+      // Success callback
+      () => {
+        console.log('✅ Profile updated successfully')
+        setIsEditDialogOpen(false)
+      },
+      // Error callback
+      (error) => {
+        console.error('❌ Error saving profile:', error)
+        toastUtils.error('Failed to save profile. Please try again.')
       }
-    } catch (error) {
-      console.error('❌ Error saving profile:', error)
-      alert('Error saving profile changes. Please try again.')
-    }
-
-    setIsSaving(false)
-    setIsEditDialogOpen(false)
+    )
   }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -547,9 +510,16 @@ function ProfilePage() {
             </div>
 
             {/* Save Button */}
-            <Button onClick={handleSaveProfile} disabled={isSaving} className="w-full">
-              {isSaving ? "Saving..." : "Save Changes"}
-            </Button>
+            <LoadingButton 
+              onClick={handleSaveProfile} 
+              loadingState={profileSave}
+              loadingText="Saving..."
+              successText="Saved!"
+              errorText="Error!"
+              className="w-full"
+            >
+              Save Changes
+            </LoadingButton>
           </div>
         </DialogContent>
       </Dialog>

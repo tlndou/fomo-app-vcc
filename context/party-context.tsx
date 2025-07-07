@@ -21,6 +21,13 @@ interface PartyContextType {
   exportData: () => string
   importData: (data: string) => boolean
   migrateFromLocalStorage: () => Promise<void>
+  // New optimistic update methods
+  optimisticAddParty: (party: Omit<Party, 'id' | 'createdAt' | 'updatedAt'>) => void
+  optimisticUpdateParty: (id: string, updates: Partial<Party>) => void
+  optimisticDeleteParty: (id: string) => void
+  isAddingParty: boolean
+  isUpdatingParty: boolean
+  isDeletingParty: boolean
 }
 
 const PartyContext = createContext<PartyContextType | undefined>(undefined)
@@ -395,6 +402,12 @@ export function PartyProvider({ children }: PartyProviderProps) {
     exportData,
     importData,
     migrateFromLocalStorage,
+    optimisticAddParty: () => {},
+    optimisticUpdateParty: () => {},
+    optimisticDeleteParty: () => {},
+    isAddingParty: false,
+    isUpdatingParty: false,
+    isDeletingParty: false
   }
 
   if (loading) {

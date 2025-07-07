@@ -28,6 +28,10 @@ interface AuthContextType {
   resendEmailConfirmation: (email: string) => Promise<{ success: boolean; message: string }>
   forceRefreshUserData: () => Promise<void>
   syncUserData: () => Promise<void>
+  // New optimistic update methods
+  optimisticUpdateProfile: (updates: Partial<User>) => void
+  revertProfileUpdate: () => void
+  isUpdatingProfile: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -35,6 +39,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
+  const [previousUserState, setPreviousUserState] = useState<User | null>(null)
 
   useEffect(() => {
     // Get initial session
@@ -237,6 +243,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(prev => prev ? { ...prev, ...updates } : null)
     } else {
       throw new Error('Failed to sync profile updates')
+    }
+  }
+
+  // Optimistic update - immediately update UI, then sync in background
+  const optimisticUpdateProfile = (updates: Partial<User>) => {
+    if (!user) return
+
+    // Store previous state for potential rollback
+    setPreviousUserState(user)
+    
+    // Immediately update UI
+    setUser(prev => prev ? { ...prev, ...updates } : null)
+    
+    // Set loading state
+    setIsUpdatingProfile(true)
+    
+    // Sync in background
+    syncService.syncUserProfile(user.id, updates)
+      .then((success) => {
+        if (success) {
+          console.log('✅ Optimistic update confirmed')
+        } else {
+          console.error('❌ Optimistic update failed, reverting...')
+          revertProfileUpdate()
+        }
+      })
+      .catch((error) => {
+        console.error('❌ Optimistic update error:', error)
+        revertProfileUpdate()
+      })
+      .finally(() => {
+        setIsUpdatingProfile(false)
+      })
+  }
+
+  // Revert optimistic update on failure
+  const revertProfileUpdate = () => {
+    if (previousUserState) {
+      setUser(previousUserState)
+      setPreviousUserState(null)
     }
   }
 
@@ -531,6 +577,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     forceRefreshUserData,
     syncUserData,
+    optimisticUpdateProfile,
+    revertProfileUpdate,
+    isUpdatingProfile,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
