@@ -38,6 +38,7 @@ import { useUserStats } from "@/hooks/use-user-stats"
 import { supabase } from "@/lib/supabase"
 import { LoadingButton } from "@/components/ui/loading-button"
 import { useLoadingStates, loadingUtils, toastUtils } from "@/lib/loading-states"
+import { ProfilePhotoCropper } from "@/components/ui/profile-photo-cropper"
 
 // Extended user type for profile
 interface ProfileUser extends User {
@@ -77,6 +78,10 @@ function ProfilePage() {
   const [editName, setEditName] = useState("")
   const [editBio, setEditBio] = useState("")
   const [editAvatar, setEditAvatar] = useState<string | null>(null)
+
+  // Photo cropper state
+  const [isCropperOpen, setIsCropperOpen] = useState(false)
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
 
   useEffect(() => {
     // If the userId matches the current authenticated user, create a profile for them
@@ -249,12 +254,29 @@ function ProfilePage() {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setEditAvatar(e.target?.result as string)
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toastUtils.error('Please select an image file')
+        return
       }
-      reader.readAsDataURL(file)
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toastUtils.error('Image file size must be less than 5MB')
+        return
+      }
+
+      // Open cropper with selected file
+      setSelectedImageFile(file)
+      setIsCropperOpen(true)
     }
+  }
+
+  const handleCropComplete = (croppedImageUrl: string) => {
+    setEditAvatar(croppedImageUrl)
+    setSelectedImageFile(null)
+    setIsCropperOpen(false)
+    toastUtils.success('Photo cropped successfully!')
   }
 
   const handleBlock = () => {
@@ -546,6 +568,17 @@ function ProfilePage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Photo Cropper Dialog */}
+      <ProfilePhotoCropper
+        isOpen={isCropperOpen}
+        onClose={() => {
+          setIsCropperOpen(false)
+          setSelectedImageFile(null)
+        }}
+        onCropComplete={handleCropComplete}
+        imageFile={selectedImageFile}
+      />
     </div>
   )
 }
