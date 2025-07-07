@@ -43,7 +43,7 @@ function CreatePartyPage() {
   const isEditing = !!draftId
   const { addParty, saveDraft, updateDraft, publishDraft, getDraftById } = useParties()
   const { toast } = useToast()
-  const { currentUser } = useAuth()
+  const { user } = useAuth()
 
   // Generate unique party ID and invite link
   const [partyId] = useState(() => draftId || generatePartyId())
@@ -216,7 +216,7 @@ function CreatePartyPage() {
       location: location,
       description: description,
       attendees: invites.filter(invite => invite.status === 'approved').length + 1, // +1 for creator
-      hosts: [currentUser?.id || "unknown", ...coHosts.map(coHost => coHost.name)], // Include current user ID and co-hosts
+      hosts: [user?.id || "unknown", ...coHosts.map(coHost => coHost.name)], // Include current user ID and co-hosts
       status: isDraft ? "draft" as const : "upcoming" as const,
       locationTags,
       userTags,

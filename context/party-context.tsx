@@ -84,44 +84,56 @@ export function PartyProvider({ children }: PartyProviderProps) {
         
         // Step 5: Enable real-time updates with subscription
         console.log('Setting up real-time subscriptions...')
-        const subscription = partyService.subscribeToParties((payload) => {
-          console.log('Real-time update received:', payload)
-          
-          // Convert database fields to frontend format
-          const convertParty = (party: any) => ({
-            ...party,
-            locationTags: party.location_tags,
-            userTags: party.user_tags,
-            coHosts: party.co_hosts,
-            requireApproval: party.require_approval,
-            createdAt: party.created_at,
-            updatedAt: party.updated_at
+        try {
+          const subscription = partyService.subscribeToParties((payload) => {
+            try {
+              console.log('Real-time update received:', payload)
+              
+              // Convert database fields to frontend format
+              const convertParty = (party: any) => ({
+                ...party,
+                locationTags: party.location_tags,
+                userTags: party.user_tags,
+                coHosts: party.co_hosts,
+                requireApproval: party.require_approval,
+                createdAt: party.created_at,
+                updatedAt: party.updated_at
+              })
+              
+              if (payload.eventType === 'INSERT') {
+                const newParty = convertParty(payload.new)
+                if (newParty.status === 'draft') {
+                  setDrafts(prev => [newParty, ...prev])
+                } else {
+                  setParties(prev => [newParty, ...prev])
+                }
+              } else if (payload.eventType === 'UPDATE') {
+                const updatedParty = convertParty(payload.new)
+                if (updatedParty.status === 'draft') {
+                  setDrafts(prev => prev.map(draft => draft.id === updatedParty.id ? updatedParty : draft))
+                } else {
+                  setParties(prev => prev.map(party => party.id === updatedParty.id ? updatedParty : party))
+                }
+              } else if (payload.eventType === 'DELETE') {
+                const deletedParty = payload.old
+                setParties(prev => prev.filter(party => party.id !== deletedParty.id))
+                setDrafts(prev => prev.filter(draft => draft.id !== deletedParty.id))
+              }
+            } catch (error) {
+              console.error('Error handling real-time update:', error)
+            }
           })
           
-          if (payload.eventType === 'INSERT') {
-            const newParty = convertParty(payload.new)
-            if (newParty.status === 'draft') {
-              setDrafts(prev => [newParty, ...prev])
-            } else {
-              setParties(prev => [newParty, ...prev])
+          return () => {
+            console.log('Cleaning up real-time subscription...')
+            try {
+              subscription.unsubscribe()
+            } catch (error) {
+              console.error('Error unsubscribing from real-time updates:', error)
             }
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedParty = convertParty(payload.new)
-            if (updatedParty.status === 'draft') {
-              setDrafts(prev => prev.map(draft => draft.id === updatedParty.id ? updatedParty : draft))
-            } else {
-              setParties(prev => prev.map(party => party.id === updatedParty.id ? updatedParty : party))
-            }
-          } else if (payload.eventType === 'DELETE') {
-            const deletedParty = payload.old
-            setParties(prev => prev.filter(party => party.id !== deletedParty.id))
-            setDrafts(prev => prev.filter(draft => draft.id !== deletedParty.id))
           }
-        })
-        
-        return () => {
-          console.log('Cleaning up real-time subscription...')
-          subscription.unsubscribe()
+        } catch (error) {
+          console.error('Error setting up real-time subscription:', error)
         }
       } catch (error) {
         console.error('Error loading parties:', error)
@@ -136,29 +148,38 @@ export function PartyProvider({ children }: PartyProviderProps) {
   // Update party status based on start date
   useEffect(() => {
     const updatePartyStatus = () => {
-      const now = new Date()
-      const updatedParties = parties.map(party => {
-        const startDate = new Date(`${party.date} ${party.time}`)
-        if (party.status === 'upcoming' && now >= startDate) {
-          return { ...party, status: 'live' as const }
-        }
-        return party
-      })
-      
-      const hasChanges = updatedParties.some((party, index) => party.status !== parties[index]?.status)
-      
-      if (hasChanges) {
-        setParties(updatedParties)
-        // Update parties in Supabase
-        updatedParties.forEach(async (party) => {
-          if (party.status !== parties.find(p => p.id === party.id)?.status) {
+      try {
+        const now = new Date()
+        const updatedParties = parties.map(party => {
+          try {
+            const startDate = new Date(`${party.date} ${party.time}`)
+            if (party.status === 'upcoming' && now >= startDate) {
+              return { ...party, status: 'live' as const }
+            }
+            return party
+          } catch (error) {
+            console.error('Error processing party status update:', error)
+            return party
+          }
+        })
+        
+        const hasChanges = updatedParties.some((party, index) => party.status !== parties[index]?.status)
+        
+        if (hasChanges) {
+          setParties(updatedParties)
+          // Update parties in Supabase
+          updatedParties.forEach(async (party) => {
             try {
-              await partyService.updateParty(party.id, { status: party.status })
+              if (party.status !== parties.find(p => p.id === party.id)?.status) {
+                await partyService.updateParty(party.id, { status: party.status })
+              }
             } catch (error) {
               console.error('Error updating party status:', error)
             }
-          }
-        })
+          })
+        }
+      } catch (error) {
+        console.error('Error in party status update:', error)
       }
     }
 
