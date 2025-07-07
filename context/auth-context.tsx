@@ -4,7 +4,6 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { supabase } from "@/lib/supabase"
 import { clearUserCache } from "@/lib/cached-api"
 import { validateEmail } from "@/lib/utils"
-import { syncService } from "@/lib/sync-service"
 
 interface User {
   id: string
@@ -50,49 +49,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('🔍 Session user data:', session.user)
         console.log('🔍 User metadata:', session.user.user_metadata)
         
-        // Use sync service to get user profile with fallbacks
-        const userProfile = await syncService.getUserProfile(session.user.id)
+        // Get user profile from localStorage
+        const storedUsers = localStorage.getItem('fomo-users')
+        const users = storedUsers ? JSON.parse(storedUsers) : {}
+        const storedUserData = users[session.user.id]
         
-        if (userProfile) {
-          console.log('🔍 User profile from sync service:', userProfile)
-          setUser(userProfile)
-        } else {
-          // Fallback to old method
-          const storedUsers = localStorage.getItem('fomo-users')
-          const users = storedUsers ? JSON.parse(storedUsers) : {}
-          const storedUserData = users[session.user.id]
-          
-          console.log('🔍 Stored user data:', storedUserData)
-          
-          const userData: User = {
-            id: session.user.id,
-            name: session.user.user_metadata?.name || storedUserData?.name || "User",
-            username: session.user.user_metadata?.username || storedUserData?.username || "user",
-            email: session.user.email,
-            avatar: session.user.user_metadata?.avatar_url || storedUserData?.avatar,
-            bio: session.user.user_metadata?.bio || storedUserData?.bio,
-            joinDate: session.user.user_metadata?.joinDate || storedUserData?.joinDate,
-            starSign: session.user.user_metadata?.starSign || storedUserData?.starSign,
-            age: session.user.user_metadata?.age || storedUserData?.age,
-          }
-          
-          console.log('🔍 Final user data:', userData)
-          setUser(userData)
-
-          // Store user data in localStorage for other users to access
-          users[session.user.id] = {
-            id: session.user.id,
-            name: userData.name,
-            username: userData.username,
-            starSign: userData.starSign,
-            joinDate: userData.joinDate,
-            avatar: userData.avatar,
-            bio: userData.bio,
-            age: userData.age,
-          }
-          
-          localStorage.setItem('fomo-users', JSON.stringify(users))
+        console.log('🔍 Stored user data:', storedUserData)
+        
+        const userData: User = {
+          id: session.user.id,
+          name: session.user.user_metadata?.name || storedUserData?.name || "User",
+          username: session.user.user_metadata?.username || storedUserData?.username || "user",
+          email: session.user.email,
+          avatar: session.user.user_metadata?.avatar_url || storedUserData?.avatar,
+          bio: session.user.user_metadata?.bio || storedUserData?.bio,
+          joinDate: session.user.user_metadata?.joinDate || storedUserData?.joinDate,
+          starSign: session.user.user_metadata?.starSign || storedUserData?.starSign,
+          age: session.user.user_metadata?.age || storedUserData?.age,
         }
+        
+        console.log('🔍 Final user data:', userData)
+        setUser(userData)
+
+        // Store user data in localStorage for other users to access
+        users[session.user.id] = {
+          id: session.user.id,
+          name: userData.name,
+          username: userData.username,
+          starSign: userData.starSign,
+          joinDate: userData.joinDate,
+          avatar: userData.avatar,
+          bio: userData.bio,
+          age: userData.age,
+        }
+        
+        localStorage.setItem('fomo-users', JSON.stringify(users))
       }
       setLoading(false)
     }
@@ -109,52 +100,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('🔍 Auth state change - Session user data:', session.user)
           console.log('🔍 Auth state change - User metadata:', session.user.user_metadata)
           
-          // Use sync service to get user profile with fallbacks
-          const userProfile = await syncService.getUserProfile(session.user.id)
+          // Get user profile from localStorage
+          const storedUsers = localStorage.getItem('fomo-users')
+          const users = storedUsers ? JSON.parse(storedUsers) : {}
+          const storedUserData = users[session.user.id]
           
-          if (userProfile) {
-            console.log('🔍 Auth state change - User profile from sync service:', userProfile)
-            setUser(userProfile)
-          } else {
-            // Fallback to old method
-            const storedUsers = localStorage.getItem('fomo-users')
-            const users = storedUsers ? JSON.parse(storedUsers) : {}
-            const storedUserData = users[session.user.id]
-            
-            console.log('🔍 Auth state change - Stored user data:', storedUserData)
-            
-            // Prioritize user metadata from Supabase, fallback to localStorage, then defaults
-            const userData: User = {
-              id: session.user.id,
-              name: session.user.user_metadata?.name || storedUserData?.name || "User",
-              username: session.user.user_metadata?.username || storedUserData?.username || "user",
-              email: session.user.email,
-              avatar: session.user.user_metadata?.avatar_url || storedUserData?.avatar,
-              bio: session.user.user_metadata?.bio || storedUserData?.bio,
-              joinDate: session.user.user_metadata?.joinDate || storedUserData?.joinDate,
-              starSign: session.user.user_metadata?.starSign || storedUserData?.starSign,
-              age: session.user.user_metadata?.age || storedUserData?.age,
-            }
-            
-            console.log('🔍 Auth state change - Final user data:', userData)
-            setUser(userData)
-
-            // Update localStorage with the latest data
-            users[session.user.id] = {
-              id: session.user.id,
-              name: userData.name,
-              username: userData.username,
-              starSign: userData.starSign,
-              joinDate: userData.joinDate,
-              avatar: userData.avatar,
-              bio: userData.bio,
-              age: userData.age,
-              email: userData.email,
-            }
-            
-            localStorage.setItem('fomo-users', JSON.stringify(users))
-            console.log('🔍 Auth state change - Updated localStorage with user data')
+          console.log('🔍 Auth state change - Stored user data:', storedUserData)
+          
+          // Prioritize user metadata from Supabase, fallback to localStorage, then defaults
+          const userData: User = {
+            id: session.user.id,
+            name: session.user.user_metadata?.name || storedUserData?.name || "User",
+            username: session.user.user_metadata?.username || storedUserData?.username || "user",
+            email: session.user.email,
+            avatar: session.user.user_metadata?.avatar_url || storedUserData?.avatar,
+            bio: session.user.user_metadata?.bio || storedUserData?.bio,
+            joinDate: session.user.user_metadata?.joinDate || storedUserData?.joinDate,
+            starSign: session.user.user_metadata?.starSign || storedUserData?.starSign,
+            age: session.user.user_metadata?.age || storedUserData?.age,
           }
+          
+          console.log('🔍 Auth state change - Final user data:', userData)
+          setUser(userData)
+
+          // Update localStorage with the latest data
+          users[session.user.id] = {
+            id: session.user.id,
+            name: userData.name,
+            username: userData.username,
+            starSign: userData.starSign,
+            joinDate: userData.joinDate,
+            avatar: userData.avatar,
+            bio: userData.bio,
+            age: userData.age,
+            email: userData.email,
+          }
+          
+          localStorage.setItem('fomo-users', JSON.stringify(users))
+          console.log('🔍 Auth state change - Updated localStorage with user data')
         } else {
           console.log('🔍 Auth state change - No session, clearing user')
           setUser(null)
@@ -197,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('🔧 SignUp: User data from response:', data.user)
     console.log('🔧 SignUp: User metadata from response:', data.user?.user_metadata)
 
-    // Use sync service to store user data
+    // Store user data in localStorage
     if (data.user) {
       const userData = {
         id: data.user.id,
@@ -211,10 +194,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
       }
       
-      // Sync user profile across all storage methods
-      await syncService.syncUserProfile(data.user.id, userData)
+      // Store in localStorage
+      const storedUsers = localStorage.getItem('fomo-users') || '{}'
+      const users = JSON.parse(storedUsers)
+      users[data.user.id] = userData
+      localStorage.setItem('fomo-users', JSON.stringify(users))
       
-      console.log('🔧 SignUp: User data synced successfully')
+      console.log('🔧 SignUp: User data stored in localStorage')
       
       // Also set the user immediately if we have the data
       setUser(userData)
@@ -236,46 +222,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = async (updates: Partial<User>) => {
     if (!user) return
 
-    // Use sync service to update profile across all devices
-    const success = await syncService.syncUserProfile(user.id, updates)
+    // Update localStorage
+    const storedUsers = localStorage.getItem('fomo-users') || '{}'
+    const users = JSON.parse(storedUsers)
+    users[user.id] = { ...users[user.id], ...updates }
+    localStorage.setItem('fomo-users', JSON.stringify(users))
     
-    if (success) {
-      setUser(prev => prev ? { ...prev, ...updates } : null)
-    } else {
-      throw new Error('Failed to sync profile updates')
-    }
+    // Update local state
+    setUser(prev => prev ? { ...prev, ...updates } : null)
   }
 
   // Optimistic update - immediately update UI, then sync in background
   const optimisticUpdateProfile = (updates: Partial<User>) => {
     if (!user) return
 
-    // Store previous state for potential rollback
-    setPreviousUserState(user)
+    // Update localStorage
+    const storedUsers = localStorage.getItem('fomo-users') || '{}'
+    const users = JSON.parse(storedUsers)
+    users[user.id] = { ...users[user.id], ...updates }
+    localStorage.setItem('fomo-users', JSON.stringify(users))
     
-    // Immediately update UI
+    // Update local state immediately
     setUser(prev => prev ? { ...prev, ...updates } : null)
-    
-    // Set loading state
-    setIsUpdatingProfile(true)
-    
-    // Sync in background
-    syncService.syncUserProfile(user.id, updates)
-      .then((success) => {
-        if (success) {
-          console.log('✅ Optimistic update confirmed')
-        } else {
-          console.error('❌ Optimistic update failed, reverting...')
-          revertProfileUpdate()
-        }
-      })
-      .catch((error) => {
-        console.error('❌ Optimistic update error:', error)
-        revertProfileUpdate()
-      })
-      .finally(() => {
-        setIsUpdatingProfile(false)
-      })
   }
 
   // Revert optimistic update on failure
@@ -288,38 +256,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const forceRefreshUserData = async () => {
     if (!user) return
+
+    // Refresh user data from localStorage
+    const storedUsers = localStorage.getItem('fomo-users')
+    const users = storedUsers ? JSON.parse(storedUsers) : {}
+    const storedUserData = users[user.id]
     
-    try {
-      console.log('🔄 Force refreshing user data...')
-      
-      const { userProfile } = await syncService.forceRefreshUserData(user.id)
-      
-      if (userProfile) {
-        setUser(userProfile)
-        console.log('✅ User data refreshed successfully')
-      }
-    } catch (error) {
-      console.error('❌ Error in forceRefreshUserData:', error)
+    if (storedUserData) {
+      setUser(prev => prev ? { ...prev, ...storedUserData } : null)
     }
   }
 
   const syncUserData = async () => {
     if (!user) return
+
+    // Store current user data in localStorage
+    const storedUsers = localStorage.getItem('fomo-users') || '{}'
+    const users = JSON.parse(storedUsers)
+    users[user.id] = user
+    localStorage.setItem('fomo-users', JSON.stringify(users))
     
-    try {
-      console.log('🔄 Syncing user data...')
-      
-      // Sync current user data to all storage methods
-      const success = await syncService.syncUserProfile(user.id, user)
-      
-      if (success) {
-        console.log('✅ User data synced successfully')
-      } else {
-        console.error('❌ Failed to sync user data')
-      }
-    } catch (error) {
-      console.error('❌ Error syncing user data:', error)
-    }
+    console.log('🔍 User data synced to localStorage')
   }
 
   // Temporary function for debugging - can be called from browser console
@@ -556,6 +513,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ;(window as any).fixStarSignData = fixStarSignData
     ;(window as any).syncUserData = syncUserData
     ;(window as any).forceRefreshUserData = forceRefreshUserData
+  }
+
+  const handleAuthSuccess = (success: unknown) => {
+    console.log('🔧 Auth success:', success)
+  }
+
+  const handleAuthError = (error: unknown) => {
+    console.error('❌ Auth error:', error)
   }
 
   const value: AuthContextType = {

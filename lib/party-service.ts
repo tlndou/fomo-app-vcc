@@ -1,6 +1,5 @@
 import { supabase } from './supabase'
 import type { Party, Invite, CoHost, LocationTag, UserTag } from '@/types/party'
-import { syncService } from './sync-service'
 
 // Party management service
 export const partyService = {
@@ -10,7 +9,7 @@ export const partyService = {
       console.log('🔍 Fetching parties from Supabase for user:', userId)
       
       // Use sync service to get user profile for proper filtering
-      const userProfile = await syncService.getUserProfile(userId)
+      const userProfile = await partyService.getUserProfile(userId)
       const userName = userProfile?.name || userId
       
       console.log('🔍 User profile from sync service:', userProfile)
@@ -313,6 +312,13 @@ export const partyService = {
       console.error('Error migrating parties from localStorage:', error)
       throw error
     }
+  },
+
+  // Get user profile from localStorage
+  async getUserProfile(userId: string) {
+    const storedUsers = localStorage.getItem('fomo-users')
+    const users = storedUsers ? JSON.parse(storedUsers) : {}
+    return users[userId] || null
   }
 }
 
