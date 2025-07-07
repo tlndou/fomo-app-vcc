@@ -12,12 +12,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, MapPin, X, Copy, Check, Plus, Trash2 } from "lucide-react"
+import { Calendar, MapPin, X, Copy, Check, Plus, Trash2, User, Users } from "lucide-react"
 import { HamburgerMenu } from "@/components/hamburger-menu"
 import { ProtectedRoute } from "@/components/protected-route"
 import type { LocationTag, UserTag, Invite, CoHost } from "@/types/party"
 import { useParties } from "@/context/party-context"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/context/auth-context"
 
 const tagColors = [
   "bg-pink-500",
@@ -32,7 +33,11 @@ const tagColors = [
 
 // Generate unique party ID and invite link
 const generatePartyId = () => {
-  return `party_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
 }
 
 function CreatePartyPage() {
@@ -42,6 +47,7 @@ function CreatePartyPage() {
   const isEditing = !!draftId
   const { addParty, saveDraft, updateDraft, publishDraft, getDraftById } = useParties()
   const { toast } = useToast()
+  const { user } = useAuth()
 
   // Generate unique party ID and invite link
   const [partyId] = useState(() => draftId || generatePartyId())
@@ -214,7 +220,7 @@ function CreatePartyPage() {
       location: location,
       description: description,
       attendees: invites.filter(invite => invite.status === 'approved').length + 1, // +1 for creator
-      hosts: coHosts.length > 0 ? coHosts.map(coHost => coHost.name) : ["Host"], // Default to "Host" if no co-hosts
+      hosts: [user?.name || "unknown", ...coHosts.map(coHost => coHost.name)], // Include current user name and co-hosts
       status: isDraft ? "draft" as const : "upcoming" as const,
       locationTags,
       userTags,
@@ -222,6 +228,10 @@ function CreatePartyPage() {
       coHosts,
       requireApproval,
     }
+
+    console.log('🔧 Creating party with data:', partyData)
+    console.log('🔧 Current user:', user)
+    console.log('🔧 User name being used as host:', user?.name || "unknown")
 
     if (isEditing) {
       if (isDraft) {

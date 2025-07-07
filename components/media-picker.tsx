@@ -273,8 +273,8 @@ export function MediaPicker({ isOpen, onClose, onSelectMedia, selectedMedia }: M
               <div className="text-xs text-gray-500 text-center space-y-1">
                 <p>Photos and videos will be automatically compressed for optimal performance</p>
                 <div className="flex items-center justify-center gap-4">
-                  <span>📸 Images: max 1080px, <2MB</span>
-                  <span>🎥 Videos: max 60s, <25MB</span>
+                  <span>📸 Images: max 1080px, &lt;2MB</span>
+                  <span>🎥 Videos: max 60s, &lt;25MB</span>
                 </div>
                 <p className="text-red-500 font-medium">Videos longer than 60 seconds will be trimmed</p>
               </div>

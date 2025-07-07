@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import type { Party, Invite, CoHost, LocationTag, UserTag } from '@/types/party'
 import { useAuth } from '@/context/auth-context'
 import { partyService, postService } from '@/lib/party-service'
+import { supabase } from '@/lib/supabase'
 
 interface PartyContextType {
   parties: Party[]
@@ -21,6 +22,14 @@ interface PartyContextType {
   exportData: () => string
   importData: (data: string) => boolean
   migrateFromLocalStorage: () => Promise<void>
+  // New optimistic update methods
+  optimisticAddParty: (party: Omit<Party, 'id' | 'createdAt' | 'updatedAt'>) => void
+  optimisticUpdateParty: (id: string, updates: Partial<Party>) => void
+  optimisticDeleteParty: (id: string) => void
+  isAddingParty: boolean
+  isUpdatingParty: boolean
+  isDeletingParty: boolean
+  debugParties: () => void
 }
 
 const PartyContext = createContext<PartyContextType | undefined>(undefined)
@@ -79,49 +88,94 @@ export function PartyProvider({ children }: PartyProviderProps) {
         console.log('Loaded parties:', partiesData)
         console.log('Loaded drafts:', draftsData)
         
-        setParties(partiesData)
+        // If no parties found, try loading all parties as fallback
+        if (partiesData.length === 0) {
+          console.log('⚠️ No parties found with user filtering, trying fallback...')
+          try {
+            const { data: allParties } = await supabase
+              .from('parties')
+              .select('*')
+              .neq('status', 'draft')
+              .order('created_at', { ascending: false })
+            
+            if (allParties && allParties.length > 0) {
+              console.log('🔍 Found parties in fallback:', allParties)
+              // Convert and use all parties as fallback
+              const fallbackParties = allParties.map(party => ({
+                ...party,
+                locationTags: party.location_tags,
+                userTags: party.user_tags,
+                coHosts: party.co_hosts,
+                requireApproval: party.require_approval,
+                createdAt: party.created_at,
+                updatedAt: party.updated_at
+              }))
+              setParties(fallbackParties)
+            } else {
+              setParties(partiesData)
+            }
+          } catch (fallbackError) {
+            console.error('Fallback loading failed:', fallbackError)
+            setParties(partiesData)
+          }
+        } else {
+          setParties(partiesData)
+        }
+        
         setDrafts(draftsData)
         
         // Step 5: Enable real-time updates with subscription
         console.log('Setting up real-time subscriptions...')
-        const subscription = partyService.subscribeToParties((payload) => {
-          console.log('Real-time update received:', payload)
-          
-          // Convert database fields to frontend format
-          const convertParty = (party: any) => ({
-            ...party,
-            locationTags: party.location_tags,
-            userTags: party.user_tags,
-            coHosts: party.co_hosts,
-            requireApproval: party.require_approval,
-            createdAt: party.created_at,
-            updatedAt: party.updated_at
+        try {
+          const subscription = partyService.subscribeToParties((payload) => {
+            try {
+              console.log('Real-time update received:', payload)
+              
+              // Convert database fields to frontend format
+              const convertParty = (party: any) => ({
+                ...party,
+                locationTags: party.location_tags,
+                userTags: party.user_tags,
+                coHosts: party.co_hosts,
+                requireApproval: party.require_approval,
+                createdAt: party.created_at,
+                updatedAt: party.updated_at
+              })
+              
+              if (payload.eventType === 'INSERT') {
+                const newParty = convertParty(payload.new)
+                if (newParty.status === 'draft') {
+                  setDrafts(prev => [newParty, ...prev])
+                } else {
+                  setParties(prev => [newParty, ...prev])
+                }
+              } else if (payload.eventType === 'UPDATE') {
+                const updatedParty = convertParty(payload.new)
+                if (updatedParty.status === 'draft') {
+                  setDrafts(prev => prev.map(draft => draft.id === updatedParty.id ? updatedParty : draft))
+                } else {
+                  setParties(prev => prev.map(party => party.id === updatedParty.id ? updatedParty : party))
+                }
+              } else if (payload.eventType === 'DELETE') {
+                const deletedParty = payload.old
+                setParties(prev => prev.filter(party => party.id !== deletedParty.id))
+                setDrafts(prev => prev.filter(draft => draft.id !== deletedParty.id))
+              }
+            } catch (error) {
+              console.error('Error handling real-time update:', error)
+            }
           })
           
-          if (payload.eventType === 'INSERT') {
-            const newParty = convertParty(payload.new)
-            if (newParty.status === 'draft') {
-              setDrafts(prev => [newParty, ...prev])
-            } else {
-              setParties(prev => [newParty, ...prev])
+          return () => {
+            console.log('Cleaning up real-time subscription...')
+            try {
+              subscription.unsubscribe()
+            } catch (error) {
+              console.error('Error unsubscribing from real-time updates:', error)
             }
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedParty = convertParty(payload.new)
-            if (updatedParty.status === 'draft') {
-              setDrafts(prev => prev.map(draft => draft.id === updatedParty.id ? updatedParty : draft))
-            } else {
-              setParties(prev => prev.map(party => party.id === updatedParty.id ? updatedParty : party))
-            }
-          } else if (payload.eventType === 'DELETE') {
-            const deletedParty = payload.old
-            setParties(prev => prev.filter(party => party.id !== deletedParty.id))
-            setDrafts(prev => prev.filter(draft => draft.id !== deletedParty.id))
           }
-        })
-        
-        return () => {
-          console.log('Cleaning up real-time subscription...')
-          subscription.unsubscribe()
+        } catch (error) {
+          console.error('Error setting up real-time subscription:', error)
         }
       } catch (error) {
         console.error('Error loading parties:', error)
@@ -136,29 +190,38 @@ export function PartyProvider({ children }: PartyProviderProps) {
   // Update party status based on start date
   useEffect(() => {
     const updatePartyStatus = () => {
-      const now = new Date()
-      const updatedParties = parties.map(party => {
-        const startDate = new Date(`${party.date} ${party.time}`)
-        if (party.status === 'upcoming' && now >= startDate) {
-          return { ...party, status: 'live' as const }
-        }
-        return party
-      })
-      
-      const hasChanges = updatedParties.some((party, index) => party.status !== parties[index]?.status)
-      
-      if (hasChanges) {
-        setParties(updatedParties)
-        // Update parties in Supabase
-        updatedParties.forEach(async (party) => {
-          if (party.status !== parties.find(p => p.id === party.id)?.status) {
+      try {
+        const now = new Date()
+        const updatedParties = parties.map(party => {
+          try {
+            const startDate = new Date(`${party.date} ${party.time}`)
+            if (party.status === 'upcoming' && now >= startDate) {
+              return { ...party, status: 'live' as const }
+            }
+            return party
+          } catch (error) {
+            console.error('Error processing party status update:', error)
+            return party
+          }
+        })
+        
+        const hasChanges = updatedParties.some((party, index) => party.status !== parties[index]?.status)
+        
+        if (hasChanges) {
+          setParties(updatedParties)
+          // Update parties in Supabase
+          updatedParties.forEach(async (party) => {
             try {
-              await partyService.updateParty(party.id, { status: party.status })
+              if (party.status !== parties.find(p => p.id === party.id)?.status) {
+                await partyService.updateParty(party.id, { status: party.status })
+              }
             } catch (error) {
               console.error('Error updating party status:', error)
             }
-          }
-        })
+          })
+        }
+      } catch (error) {
+        console.error('Error in party status update:', error)
       }
     }
 
@@ -172,10 +235,30 @@ export function PartyProvider({ children }: PartyProviderProps) {
 
   const addParty = async (partyData: Omit<Party, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
+      // Create a temporary party with optimistic data
+      const tempParty: Party = {
+        id: `temp-${Date.now()}`,
+        ...partyData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      
+      // Optimistically add to local state immediately
+      setParties(prev => [tempParty, ...prev])
+      
+      // Create the party in Supabase
       const newParty = await partyService.createParty(partyData)
-      setParties(prev => [newParty, ...prev])
+      
+      // Replace the temporary party with the real one
+      setParties(prev => prev.map(party => 
+        party.id === tempParty.id ? newParty : party
+      ))
+      
+      console.log('✅ Party created and added to state:', newParty)
     } catch (error) {
       console.error('Error adding party:', error)
+      // Remove the temporary party on error
+      setParties(prev => prev.filter(party => !party.id.startsWith('temp-')))
       throw error
     }
   }
@@ -204,13 +287,34 @@ export function PartyProvider({ children }: PartyProviderProps) {
 
   const saveDraft = async (draftData: Omit<Party, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
+      // Create a temporary draft with optimistic data
+      const tempDraft: Party = {
+        id: `temp-draft-${Date.now()}`,
+        ...draftData,
+        status: 'draft',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      
+      // Optimistically add to local state immediately
+      setDrafts(prev => [tempDraft, ...prev])
+      
+      // Create the draft in Supabase
       const newDraft = await partyService.createParty({
         ...draftData,
         status: 'draft'
       })
-      setDrafts(prev => [newDraft, ...prev])
+      
+      // Replace the temporary draft with the real one
+      setDrafts(prev => prev.map(draft => 
+        draft.id === tempDraft.id ? newDraft : draft
+      ))
+      
+      console.log('✅ Draft saved and added to state:', newDraft)
     } catch (error) {
       console.error('Error saving draft:', error)
+      // Remove the temporary draft on error
+      setDrafts(prev => prev.filter(draft => !draft.id.startsWith('temp-draft-')))
       throw error
     }
   }
@@ -358,6 +462,26 @@ export function PartyProvider({ children }: PartyProviderProps) {
     }
   }
 
+  const debugParties = () => {
+    console.log('🔍 Debug: Current parties state:', parties)
+    console.log('🔍 Debug: Current drafts state:', drafts)
+    console.log('🔍 Debug: Current user:', user)
+    
+    // Check localStorage for user data
+    const storedUsers = localStorage.getItem('fomo-users')
+    const users = storedUsers ? JSON.parse(storedUsers) : {}
+    console.log('🔍 Debug: Stored users:', users)
+    
+    // Check if there are any parties in Supabase
+    supabase
+      .from('parties')
+      .select('*')
+      .then(({ data, error }) => {
+        console.log('🔍 Debug: All parties in Supabase:', data)
+        console.log('🔍 Debug: Supabase error:', error)
+      })
+  }
+
   const value: PartyContextType = {
     parties,
     drafts,
@@ -374,6 +498,13 @@ export function PartyProvider({ children }: PartyProviderProps) {
     exportData,
     importData,
     migrateFromLocalStorage,
+    optimisticAddParty: () => {},
+    optimisticUpdateParty: () => {},
+    optimisticDeleteParty: () => {},
+    isAddingParty: false,
+    isUpdatingParty: false,
+    isDeletingParty: false,
+    debugParties,
   }
 
   if (loading) {

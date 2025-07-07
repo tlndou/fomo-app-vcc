@@ -35,6 +35,10 @@ import { ProtectedRoute } from "@/components/protected-route"
 import { useAuth } from "@/context/auth-context"
 import { useParties } from "@/context/party-context"
 import { useUserStats } from "@/hooks/use-user-stats"
+import { supabase } from "@/lib/supabase"
+import { LoadingButton } from "@/components/ui/loading-button"
+import { useLoadingStates, loadingUtils, toastUtils } from "@/lib/loading-states"
+import { ProfilePhotoCropper } from "@/components/ui/profile-photo-cropper"
 
 // Extended user type for profile
 interface ProfileUser extends User {
@@ -59,20 +63,25 @@ function ProfilePage() {
   const router = useRouter()
   const params = useParams()
   const userId = params.userId as string
-  const { user: authUser } = useAuth()
+  const { user: authUser, optimisticUpdateProfile, isUpdatingProfile } = useAuth()
   const { parties } = useParties()
   const { stats, incrementFriendCount, decrementFriendCount } = useUserStats(userId)
+  const { profileSave, setLoadingState } = useLoadingStates()
 
   const [user, setUser] = useState<ProfileUser | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false)
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   // Edit form state
   const [editName, setEditName] = useState("")
   const [editBio, setEditBio] = useState("")
   const [editAvatar, setEditAvatar] = useState<string | null>(null)
+
+  // Photo cropper state
+  const [isCropperOpen, setIsCropperOpen] = useState(false)
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
 
   useEffect(() => {
     // If the userId matches the current authenticated user, create a profile for them
@@ -196,51 +205,78 @@ function ProfilePage() {
   }
 
   const handleSaveProfile = async () => {
-    setIsSaving(true)
+    if (!user) return
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    setUser((prev) =>
-      prev
-        ? {
-            ...prev,
-            name: editName,
-            bio: editBio,
-            avatar: editAvatar || prev.avatar,
-          }
-        : null,
-    )
-
-    // Update stored user data in localStorage
-    if (authUser) {
-      const storedUsers = localStorage.getItem('fomo-users')
-      const users = storedUsers ? JSON.parse(storedUsers) : {}
-      
-      if (users[authUser.id]) {
-        users[authUser.id] = {
-          ...users[authUser.id],
+    // Use optimistic update with loading state management
+    await loadingUtils.optimisticUpdate(
+      // Immediate update
+      () => {
+        optimisticUpdateProfile({
           name: editName,
           bio: editBio,
-          avatar: editAvatar || users[authUser.id].avatar,
-        }
-        localStorage.setItem('fomo-users', JSON.stringify(users))
+          avatar: editAvatar || user.avatar,
+        })
+        
+        // Update local state immediately
+        setUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                name: editName,
+                bio: editBio,
+                avatar: editAvatar || prev.avatar,
+              }
+            : null,
+        )
+        
+        toastUtils.success('Profile updated successfully!')
+      },
+      // API call
+      async () => {
+        // The optimistic update already handles the sync
+        return Promise.resolve()
+      },
+      // Loading state setter
+      setLoadingState.bind(null, 'profileSave'),
+      // Success callback
+      () => {
+        console.log('✅ Profile updated successfully')
+        setIsEditDialogOpen(false)
+      },
+      // Error callback
+      (error) => {
+        console.error('❌ Error saving profile:', error)
+        toastUtils.error('Failed to save profile. Please try again.')
       }
-    }
-
-    setIsSaving(false)
-    setIsEditDialogOpen(false)
+    )
   }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setEditAvatar(e.target?.result as string)
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toastUtils.error('Please select an image file')
+        return
       }
-      reader.readAsDataURL(file)
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toastUtils.error('Image file size must be less than 5MB')
+        return
+      }
+
+      // Open cropper with selected file
+      setSelectedImageFile(file)
+      setIsCropperOpen(true)
     }
+  }
+
+  const handleCropComplete = (croppedImageUrl: string) => {
+    setEditAvatar(croppedImageUrl)
+    setSelectedImageFile(null)
+    setIsCropperOpen(false)
+    toastUtils.success('Photo cropped successfully!')
   }
 
   const handleBlock = () => {
@@ -495,9 +531,16 @@ function ProfilePage() {
             </div>
 
             {/* Save Button */}
-            <Button onClick={handleSaveProfile} disabled={isSaving} className="w-full">
-              {isSaving ? "Saving..." : "Save Changes"}
-            </Button>
+            <LoadingButton 
+              onClick={handleSaveProfile} 
+              loadingState={profileSave}
+              loadingText="Saving..."
+              successText="Saved!"
+              errorText="Error!"
+              className="w-full"
+            >
+              Save Changes
+            </LoadingButton>
           </div>
         </DialogContent>
       </Dialog>
@@ -525,6 +568,17 @@ function ProfilePage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Photo Cropper Dialog */}
+      <ProfilePhotoCropper
+        isOpen={isCropperOpen}
+        onClose={() => {
+          setIsCropperOpen(false)
+          setSelectedImageFile(null)
+        }}
+        onCropComplete={handleCropComplete}
+        imageFile={selectedImageFile}
+      />
     </div>
   )
 }

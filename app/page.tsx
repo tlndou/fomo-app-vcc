@@ -163,12 +163,16 @@ function HomePage() {
   // Test Supabase connection
   useEffect(() => {
     async function testConnection() {
-      console.log('🔌 Testing Supabase connection...')
-      const { data, error } = await supabase.from('users').select('count').limit(1)
-      if (error) {
-        console.log('❌ Connection error:', error.message)
-      } else {
-        console.log('✅ Supabase connected successfully!')
+      try {
+        console.log('🔌 Testing Supabase connection...')
+        const { data, error } = await supabase.from('parties').select('count').limit(1)
+        if (error) {
+          console.log('❌ Connection error:', error.message)
+        } else {
+          console.log('✅ Supabase connected successfully!')
+        }
+      } catch (err) {
+        console.error('❌ Connection test failed:', err)
       }
     }
     testConnection()

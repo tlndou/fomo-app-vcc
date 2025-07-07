@@ -6,7 +6,15 @@ export const partyService = {
   // Get all parties for a user
   async getParties(userId: string) {
     try {
-      console.log('Fetching parties from Supabase...')
+      console.log('🔍 Fetching parties from Supabase for user:', userId)
+      
+      // Use sync service to get user profile for proper filtering
+      const userProfile = await partyService.getUserProfile(userId)
+      const userName = userProfile?.name || userId
+      
+      console.log('🔍 User profile from sync service:', userProfile)
+      console.log('🔍 Using user name for filtering:', userName)
+      
       const { data, error } = await supabase
         .from('parties')
         .select('*')
@@ -14,14 +22,25 @@ export const partyService = {
         .order('created_at', { ascending: false })
       
       if (error) {
-        console.error('Supabase error:', error)
+        console.error('❌ Supabase error:', error)
         throw error
       }
       
-      console.log('Raw parties data from Supabase:', data)
+      console.log('🔍 Raw parties data from Supabase:', data)
+      
+      // Filter parties where the user is a host (by name)
+      const userParties = (data || []).filter(party => {
+        const hosts = party.hosts || []
+        console.log(`🔍 Checking party "${party.name}" with hosts:`, hosts)
+        const isHost = hosts.some((host: string) => host === userName)
+        console.log(`🔍 Is user "${userName}" a host? ${isHost}`)
+        return isHost
+      })
+      
+      console.log('✅ Filtered parties for user:', userParties)
       
       // Convert database fields to frontend format
-      const convertedParties = (data || []).map(party => ({
+      const convertedParties = userParties.map(party => ({
         ...party,
         locationTags: party.location_tags,
         userTags: party.user_tags,
@@ -31,10 +50,10 @@ export const partyService = {
         updatedAt: party.updated_at
       }))
       
-      console.log('Converted parties:', convertedParties)
+      console.log('✅ Converted parties:', convertedParties)
       return convertedParties
     } catch (error) {
-      console.error('Error fetching parties:', error)
+      console.error('❌ Error fetching parties:', error)
       return []
     }
   },
@@ -42,6 +61,7 @@ export const partyService = {
   // Get all drafts for a user
   async getDrafts(userId: string) {
     try {
+      console.log('Fetching drafts from Supabase for user:', userId)
       const { data, error } = await supabase
         .from('parties')
         .select('*')
@@ -50,8 +70,24 @@ export const partyService = {
       
       if (error) throw error
       
+      console.log('Raw drafts data from Supabase:', data)
+      
+      // Get user name from localStorage to filter drafts
+      const storedUsers = localStorage.getItem('fomo-users')
+      const users = storedUsers ? JSON.parse(storedUsers) : {}
+      const currentUser = users[userId]
+      const userName = currentUser?.name || userId
+      
+      // Filter drafts where the user is a host (by name)
+      const userDrafts = (data || []).filter(party => {
+        const hosts = party.hosts || []
+        return hosts.some((host: string) => host === userName)
+      })
+      
+      console.log('Filtered drafts for user:', userDrafts)
+      
       // Convert database fields to frontend format
-      return (data || []).map(party => ({
+      return userDrafts.map(party => ({
         ...party,
         locationTags: party.location_tags,
         userTags: party.user_tags,
@@ -71,21 +107,25 @@ export const partyService = {
     try {
       console.log('Creating party with data:', party)
       const now = new Date().toISOString()
+      
+      // Generate a proper UUID
+      const generateUUID = () => {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0
+          const v = c === 'x' ? r : (r & 0x3 | 0x8)
+          return v.toString(16)
+        })
+      }
+      
       const partyWithTimestamp = {
-        id: `party_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: generateUUID(),
         name: party.name,
         date: party.date,
         time: party.time,
         location: party.location,
         description: party.description,
-        attendees: party.attendees || 0,
         hosts: party.hosts || [],
         status: party.status || 'draft',
-        location_tags: party.locationTags || [],
-        user_tags: party.userTags || [],
-        invites: party.invites || [],
-        co_hosts: party.coHosts || [],
-        require_approval: party.requireApproval || false,
         created_at: now,
         updated_at: now,
       }
@@ -107,10 +147,13 @@ export const partyService = {
       // Convert back to camelCase for frontend
       const convertedParty = {
         ...data[0],
-        locationTags: data[0].location_tags,
-        userTags: data[0].user_tags,
-        coHosts: data[0].co_hosts,
-        requireApproval: data[0].require_approval,
+        attendees: data[0].attendees || 0,
+        hosts: data[0].hosts || ["unknown"],
+        locationTags: data[0].location_tags || [],
+        userTags: data[0].user_tags || [],
+        coHosts: data[0].co_hosts || [],
+        requireApproval: data[0].require_approval || false,
+        invites: data[0].invites || [],
         createdAt: data[0].created_at,
         updatedAt: data[0].updated_at
       }
@@ -237,14 +280,8 @@ export const partyService = {
         time: party.time,
         location: party.location,
         description: party.description,
-        attendees: party.attendees || 0,
         hosts: party.hosts || [],
         status: party.status || 'draft',
-        location_tags: party.locationTags || [],
-        user_tags: party.userTags || [],
-        invites: party.invites || [],
-        co_hosts: party.coHosts || [],
-        require_approval: party.requireApproval || false,
         created_at: party.createdAt || new Date().toISOString(),
         updated_at: party.updatedAt || new Date().toISOString()
       }))
@@ -275,6 +312,13 @@ export const partyService = {
       console.error('Error migrating parties from localStorage:', error)
       throw error
     }
+  },
+
+  // Get user profile from localStorage
+  async getUserProfile(userId: string) {
+    const storedUsers = localStorage.getItem('fomo-users')
+    const users = storedUsers ? JSON.parse(storedUsers) : {}
+    return users[userId] || null
   }
 }
 
